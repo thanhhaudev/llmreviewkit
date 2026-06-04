@@ -122,9 +122,11 @@ func (e *Engine) Review(ctx context.Context, bundle diff.Bundle, opts ReviewOpti
 		var rstats resolver.ResolveStats
 		var rerr error
 		usedV2 := false
+		var idx *index.Index
 
 		if e.cfg.UseIndex {
-			idx, idxErr := e.tryLoadIndex()
+			var idxErr error
+			idx, idxErr = e.tryLoadIndex()
 			if idxErr == nil && idx.Healthy() {
 				v2, v2err := resolver.FindReferencesV2(syms, e.cfg.WorkspaceRoot, idx, diffPaths, 5)
 				if v2err == nil {
@@ -157,7 +159,19 @@ func (e *Engine) Review(ctx context.Context, bundle diff.Bundle, opts ReviewOpti
 		}
 
 		before := len(bundle.Warnings)
-		attachRes := diff.AttachReferenced(&bundle, refsToInputs(rstats.Refs), e.cfg.EnrichBudget)
+		var attachRes diff.AttachResult
+		if !e.expansionEnabled() {
+			// v1.0.0 path: direct refs only.
+			attachRes = diff.AttachReferenced(&bundle, refsToInputs(rstats.Refs), e.cfg.EnrichBudget)
+			result.Stats.ExpansionByStrategy = nil
+			result.Stats.ExpansionDropped = 0
+		} else {
+			// v1.1.0 path: run expansion → rank → pack, then attach.
+			ar := e.runExpansion(syms, diffPaths, rstats.Refs, idx)
+			attachRes = diff.AttachReferenced(&bundle, attachResultToInputs(ar), e.cfg.EnrichBudget)
+			result.Stats.ExpansionByStrategy = ar.ByStrategy
+			result.Stats.ExpansionDropped = len(ar.Dropped)
+		}
 		result.ReferencedFiles = bundle.ReferencedFiles
 		for _, w := range bundle.Warnings[before:] {
 			if strings.HasPrefix(w, "referenced files dropped") && e.cfg.Verbose {
