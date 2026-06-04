@@ -29,12 +29,15 @@ func TestRenderHookWarning_Golden(t *testing.T) {
 		}
 		return
 	}
-	want, err := os.ReadFile(goldenPath)
+	wantBytes, err := os.ReadFile(goldenPath)
 	if err != nil {
 		t.Fatalf("read golden: %v", err)
 	}
-	if got != string(want) {
-		t.Errorf("output mismatch.\n--- got ---\n%s\n--- want ---\n%s", got, string(want))
+	// Normalize CRLF→LF — git checks out golden files with CRLF on
+	// Windows by default; the renderer always emits LF.
+	want := strings.ReplaceAll(string(wantBytes), "\r\n", "\n")
+	if got != want {
+		t.Errorf("output mismatch.\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }
 
