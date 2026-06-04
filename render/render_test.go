@@ -42,8 +42,12 @@ func checkGolden(t *testing.T, name, got string) {
 	if err != nil {
 		t.Fatalf("read golden %s: %v\nrun with -update to create", path, err)
 	}
-	if string(want) != got {
-		t.Errorf("output != %s\n--- want ---\n%s\n--- got ---\n%s", path, want, got)
+	// Normalize line endings — git on Windows checks out golden files with
+	// CRLF by default, but the renderer always emits LF. Strip CR so the
+	// comparison is platform-agnostic.
+	wantStr := strings.ReplaceAll(string(want), "\r\n", "\n")
+	if wantStr != got {
+		t.Errorf("output != %s\n--- want ---\n%s\n--- got ---\n%s", path, wantStr, got)
 	}
 }
 
