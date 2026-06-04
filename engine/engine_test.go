@@ -149,6 +149,112 @@ func TestEngine_BundleLogSink(t *testing.T) {
 	}
 }
 
+func TestEngine_ExpandCallersAttachesCallerFile(t *testing.T) {
+	ws := t.TempDir()
+	// Both files share package main so Go AST extractor finds the call ref
+	// without a real import path.
+	// Workspace: Authenticate defined in auth.go, called from main.go AND other.go.
+	// Diff modifies main.go (adds an extra call to Authenticate). Symbols
+	// extracted from the diff body include "Authenticate"; ExpandCallers
+	// should then pull other.go (the second caller) via index.LookupRefs.
+	mustWriteFile(t, ws, "auth.go", "package main\nfunc Authenticate(u string) error { return nil }\n")
+	mustWriteFile(t, ws, "main.go", "package main\nfunc main() { Authenticate(\"hello\") }\n")
+	mustWriteFile(t, ws, "other.go", "package main\nfunc init() { Authenticate(\"init\") }\n")
+
+	prov := mock.New(cannedReview, 10, 20)
+	cfg := engine.Config{
+		Provider:      prov,
+		WorkspaceRoot: ws,
+		StateDir:      filepath.Join(t.TempDir(), "state"),
+		UseIndex:      true,
+		ExpandCallers: true,
+	}
+	eng, err := engine.New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := eng.SyncIndex(); err != nil {
+		t.Fatalf("SyncIndex: %v", err)
+	}
+
+	// Diff modifies main.go and references Authenticate — the symbol
+	// extractor pulls "Authenticate" out of the diff body, and
+	// expand.Callers looks up workspace refs to it.
+	// Added line is a call statement (Authenticate("extra")), not a top-level
+	// declaration — fits into the fake function-body wrap that
+	// symbols.ExtractFromBundle applies to non-package Go fragments.
+	bundle := diff.Bundle{
+		Diff: "diff --git a/main.go b/main.go\n--- a/main.go\n+++ b/main.go\n@@ -1,3 +1,4 @@\n package main\n func main() {\n+  Authenticate(\"extra\")\n }\n",
+	}
+	res, err := eng.Review(context.Background(), bundle, engine.ReviewOptions{Mode: prompt.ModeStandard})
+	if err != nil {
+		t.Fatalf("Review: %v", err)
+	}
+	// ExpandCallers should have surfaced main.go as a caller (it calls Authenticate).
+	if res.Stats.ExpansionByStrategy["caller"] < 1 {
+		t.Errorf("expected at least 1 caller attached, got ExpansionByStrategy=%v", res.Stats.ExpansionByStrategy)
+	}
+}
+
+func TestEngine_ExpandTestsAttachesTestFile(t *testing.T) {
+	ws := t.TempDir()
+	mustWriteFile(t, ws, "auth.go", "package auth")
+	mustWriteFile(t, ws, "auth_test.go", "package auth\nimport \"testing\"\nfunc TestX(t *testing.T) {}\n")
+
+	prov := mock.New(cannedReview, 10, 20)
+	cfg := engine.Config{
+		Provider:    prov,
+		WorkspaceRoot: ws,
+		ExpandTests: true,
+	}
+	eng, _ := engine.New(cfg)
+	bundle := diff.Bundle{
+		Diff: "diff --git a/auth.go b/auth.go\n--- a/auth.go\n+++ b/auth.go\n@@ -1 +1,2 @@\n package auth\n+var X = 1\n",
+	}
+	res, err := eng.Review(context.Background(), bundle, engine.ReviewOptions{Mode: prompt.ModeStandard})
+	if err != nil {
+		t.Fatalf("Review: %v", err)
+	}
+	if res.Stats.ExpansionByStrategy["test"] != 1 {
+		t.Errorf("want 1 test attached, got %v", res.Stats.ExpansionByStrategy)
+	}
+}
+
+func TestEngine_BackwardCompat_v1_0_0(t *testing.T) {
+	prov := mock.New(cannedReview, 100, 200)
+	cfg := engine.Config{
+		Provider:      prov,
+		WorkspaceRoot: t.TempDir(),
+		// No v1.1.0 fields set
+	}
+	eng, _ := engine.New(cfg)
+	bundle := diff.Bundle{Diff: "diff --git a/x.go b/x.go\n--- a/x.go\n+++ b/x.go\n@@\n+x\n"}
+	res, err := eng.Review(context.Background(), bundle, engine.ReviewOptions{Mode: prompt.ModeStandard})
+	if err != nil {
+		t.Fatalf("Review: %v", err)
+	}
+	if len(res.Stats.ExpansionByStrategy) != 0 {
+		t.Errorf("v1.0.0 bare Config should not run expansion; ExpansionByStrategy=%v", res.Stats.ExpansionByStrategy)
+	}
+	if res.Stats.ExpansionDropped != 0 {
+		t.Errorf("v1.0.0 bare Config should report 0 dropped, got %d", res.Stats.ExpansionDropped)
+	}
+	if res.Stats.ResolverPath != "v1" {
+		t.Errorf("v1.0.0 bare Config should use v1 resolver, got %s", res.Stats.ResolverPath)
+	}
+}
+
+func mustWriteFile(t *testing.T, root, rel, content string) {
+	t.Helper()
+	full := filepath.Join(root, rel)
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestEngine_BudgetAutoBumpWhenExpansionEnabled(t *testing.T) {
 	prov := mock.New(cannedReview, 10, 20)
 	eng, err := engine.New(engine.Config{
