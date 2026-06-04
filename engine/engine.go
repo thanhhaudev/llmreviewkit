@@ -86,6 +86,17 @@ type ResolveStats struct {
 	IndexHits      int
 	IndexMisses    int
 	ResolverPath   string // "v1" | "v2"
+
+	// v1.1.0 additions:
+
+	// ExpansionByStrategy counts attached candidates per strategy
+	// ("def_match" + "caller" + "type_def" + "test"). Empty/nil when no
+	// expansion flag is set. Telemetry only — does not affect review.
+	ExpansionByStrategy map[string]int
+
+	// ExpansionDropped is the count of ranked candidates that fell
+	// outside EnrichBudget. Useful for tuning budget per workspace.
+	ExpansionDropped int
 }
 
 // Review runs the review pipeline on bundle and returns the parsed
