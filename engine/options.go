@@ -8,6 +8,7 @@ package engine
 import (
 	"io"
 
+	"github.com/thanhhaudev/llmreviewkit/expand"
 	"github.com/thanhhaudev/llmreviewkit/prompt"
 	"github.com/thanhhaudev/llmreviewkit/provider"
 	"github.com/thanhhaudev/llmreviewkit/statedir"
@@ -61,6 +62,26 @@ type Config struct {
 	// Verbose, if true, emits [verbose] lines to BundleLogSink (or
 	// os.Stderr if BundleLogSink is nil).
 	Verbose bool
+
+	// === v1.1.0 additions ===
+
+	// ExpandCallers enables Strategy A (caller pulling via index.LookupRefs).
+	// Requires UseIndex=true to have any effect. Default false.
+	ExpandCallers bool
+
+	// ExpandTypeDefs enables Strategy B (type-def pulling via
+	// index.LookupDefs filtered on SymTypeRef). Requires UseIndex=true.
+	// Default false.
+	ExpandTypeDefs bool
+
+	// ExpandTests enables Strategy D (test-file pulling via filename
+	// patterns). Independent of UseIndex — filesystem-only. Default false.
+	ExpandTests bool
+
+	// RankerWeights overrides the default scoring formula. nil = use
+	// expand.DefaultRankerWeights(). Provided as a pointer so "not set"
+	// is unambiguous from "all zeros".
+	RankerWeights *expand.RankerWeights
 }
 
 // ReviewOptions are per-call parameters.

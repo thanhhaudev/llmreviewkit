@@ -149,6 +149,46 @@ func TestEngine_BundleLogSink(t *testing.T) {
 	}
 }
 
+func TestEngine_BudgetAutoBumpWhenExpansionEnabled(t *testing.T) {
+	prov := mock.New(cannedReview, 10, 20)
+	eng, err := engine.New(engine.Config{
+		Provider:      prov,
+		WorkspaceRoot: t.TempDir(),
+		ExpandCallers: true,
+		// EnrichBudget left at zero
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if got := eng.EnrichBudget(); got != 96*1024 {
+		t.Fatalf("auto-bump: want 96KB when ExpandCallers=true and budget unset, got %d", got)
+	}
+}
+
+func TestEngine_BudgetNotBumpedWhenNoExpansion(t *testing.T) {
+	prov := mock.New(cannedReview, 10, 20)
+	eng, _ := engine.New(engine.Config{
+		Provider:      prov,
+		WorkspaceRoot: t.TempDir(),
+	})
+	if got := eng.EnrichBudget(); got != 32*1024 {
+		t.Fatalf("default budget should be 32KB when no expansion, got %d", got)
+	}
+}
+
+func TestEngine_BudgetExplicitOverridesAutoBump(t *testing.T) {
+	prov := mock.New(cannedReview, 10, 20)
+	eng, _ := engine.New(engine.Config{
+		Provider:      prov,
+		WorkspaceRoot: t.TempDir(),
+		ExpandCallers: true,
+		EnrichBudget:  16 * 1024, // explicit override
+	})
+	if got := eng.EnrichBudget(); got != 16*1024 {
+		t.Fatalf("explicit budget should win over auto-bump, got %d", got)
+	}
+}
+
 func TestEngine_CustomPromptRoot(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, "prompts"), 0o755); err != nil {
