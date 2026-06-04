@@ -2,7 +2,13 @@
 
 package symbols
 
-import "testing"
+import (
+	"context"
+	"os"
+	"testing"
+
+	"github.com/thanhhaudev/llmreviewkit/symbols/treesitter"
+)
 
 func TestUseWASM_ReturnsTrueForKnownGrammar(t *testing.T) {
 	// Even without compiled grammars present, useWASM should report which
@@ -83,6 +89,43 @@ func TestPythonDecoratorReceiver(t *testing.T) {
 		got := pythonDecoratorReceiver(c.in)
 		if got != c.want {
 			t.Errorf("pythonDecoratorReceiver(%q) = %q; want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestExtractPythonViaWalk_EmitsSymTypeRef(t *testing.T) {
+	ctx := context.Background()
+	r, err := treesitter.NewRuntime(ctx)
+	if err != nil {
+		t.Skipf("runtime: %v", err)
+	}
+	defer r.Close(ctx)
+	wasmPath := "../test-fixtures/tree-sitter-python.wasm"
+	data, err := os.ReadFile(wasmPath)
+	if err != nil {
+		t.Skipf("python grammar fixture not present: %v", err)
+	}
+	lang, err := r.LoadGrammar(ctx, "python", data)
+	if err != nil {
+		t.Fatalf("LoadGrammar: %v", err)
+	}
+	defer lang.Close(ctx)
+
+	src := []byte(`def f(x: Foo, y: Bar) -> Baz:
+    z: Bar = None
+    return z
+`)
+	syms := extractPythonViaWalk(ctx, lang, src, "f.py")
+
+	names := map[string]int{}
+	for _, s := range syms {
+		if s.Kind == SymTypeRef {
+			names[s.Name]++
+		}
+	}
+	for _, name := range []string{"Foo", "Bar", "Baz"} {
+		if names[name] == 0 {
+			t.Errorf("expected SymTypeRef for %s, got names=%v", name, names)
 		}
 	}
 }

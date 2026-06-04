@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -189,6 +190,20 @@ func (e *wasmExtractor) Extract(path string, content []byte) []Symbol {
 	return scanCaptures(caps, content, path)
 }
 
+// pythonTypeIdentRE matches capitalized (PEP-8 CamelCase) identifiers in a
+// Python type annotation byte range. Built-in lowercase types (int, str, bool,
+// None) don't match, which is intentional: the workspace index targets
+// user-defined types, not stdlib primitives.
+var pythonTypeIdentRE = regexp.MustCompile(`[A-Z][A-Za-z0-9_]*`)
+
+// extractPythonTypeNames returns capitalized identifiers from a type annotation
+// string. Filters per Python PEP-8: user-defined type names are CamelCase;
+// lowercase identifiers (int, str, bool, etc.) are not user-defined types in
+// the workspace index.
+func extractPythonTypeNames(text string) []string {
+	return pythonTypeIdentRE.FindAllString(text, -1)
+}
+
 // extractPythonViaWalk extracts Python symbols using tree cursor traversal,
 // bypassing ts_query_new which traps OOB for tree-sitter-python@0.23.x +
 // web-tree-sitter 0.26.9 even on a fresh runtime.
@@ -221,18 +236,28 @@ func extractPythonViaWalk(ctx context.Context, lang *treesitter.Language, conten
 	dottedNameID := lang.SymbolIDForName(ctx, "dotted_name", true)
 	aliasID := lang.SymbolIDForName(ctx, "aliased_import", true)
 	decoratorID := lang.SymbolIDForName(ctx, "decorator", true)
+	// v1.1.0: annotated assignment for body-level type refs (e.g. z: Bar = None).
+	assignmentID := lang.SymbolIDForName(ctx, "assignment", true)
 
 	// Field IDs.
 	nameFieldID := lang.FieldIDForName(ctx, "name")
 	functionFieldID := lang.FieldIDForName(ctx, "function")
 	attributeFieldID := lang.FieldIDForName(ctx, "attribute")
 	moduleNameFieldID := lang.FieldIDForName(ctx, "module_name")
+	// v1.1.0: type annotation fields for parameter + return + assignment type refs.
+	parametersFieldID := lang.FieldIDForName(ctx, "parameters")
+	returnTypeFieldID := lang.FieldIDForName(ctx, "return_type")
+	typeFieldID := lang.FieldIDForName(ctx, "type")
 
-	matchIDs := make([]uint16, 0, 7)
+	matchIDs := make([]uint16, 0, 8)
 	for _, id := range []uint16{fnDefID, classDefID, importID, importFromID, callID, decoratorID} {
 		if id != 0 {
 			matchIDs = append(matchIDs, id)
 		}
+	}
+	// Include assignment nodes to catch body-level annotated assignments.
+	if assignmentID != 0 {
+		matchIDs = append(matchIDs, assignmentID)
 	}
 	if len(matchIDs) == 0 {
 		return regexFallback(path, content)
@@ -260,6 +285,47 @@ func extractPythonViaWalk(ctx context.Context, lang *treesitter.Language, conten
 		case fnDefID, classDefID:
 			if s, e, ok := lang.NodeChildByFieldID(ctx, tree, n.NodeRaw[:], nameFieldID); ok {
 				emit(sliceBytes(content, s, e), SymDef, s)
+			}
+			// v1.1.0: emit SymTypeRef for parameter annotations + return annotation.
+			// Strategy: slice the byte range of the parameters / return_type field and
+			// regex-extract CamelCase identifiers (PEP-8 user-defined types). Built-in
+			// lowercase types (int, str, bool) don't match and are intentionally skipped.
+			if n.TypeID == fnDefID {
+				if parametersFieldID != 0 && typeFieldID != 0 {
+					if ps, pe, ok := lang.NodeChildByFieldID(ctx, tree, n.NodeRaw[:], parametersFieldID); ok {
+						paramText := sliceBytes(content, ps, pe)
+						for _, name := range extractPythonTypeNames(paramText) {
+							if name == "None" || name == "True" || name == "False" {
+								continue
+							}
+							emit(name, SymTypeRef, ps)
+						}
+					}
+				}
+				if returnTypeFieldID != 0 {
+					if rs, re_, ok := lang.NodeChildByFieldID(ctx, tree, n.NodeRaw[:], returnTypeFieldID); ok {
+						retText := sliceBytes(content, rs, re_)
+						for _, name := range extractPythonTypeNames(retText) {
+							if name == "None" || name == "True" || name == "False" {
+								continue
+							}
+							emit(name, SymTypeRef, rs)
+						}
+					}
+				}
+			}
+		case assignmentID:
+			// Annotated assignment (`z: Bar = None`) has a `type:` field.
+			if typeFieldID != 0 {
+				if ts, te, ok := lang.NodeChildByFieldID(ctx, tree, n.NodeRaw[:], typeFieldID); ok {
+					tText := sliceBytes(content, ts, te)
+					for _, name := range extractPythonTypeNames(tText) {
+						if name == "None" || name == "True" || name == "False" {
+							continue
+						}
+						emit(name, SymTypeRef, ts)
+					}
+				}
 			}
 		case importID:
 			// Children: dotted_name | aliased_import (with `name` field=dotted_name).
