@@ -35,7 +35,11 @@ func New(cfg Config) (*Engine, error) {
 	// by leaving it empty (in which case Review() will skip symbol extraction).
 	// SyncIndex also requires a non-empty WorkspaceRoot.
 	if cfg.EnrichBudget == 0 {
-		cfg.EnrichBudget = 32 * 1024
+		if cfg.ExpandCallers || cfg.ExpandTypeDefs || cfg.ExpandTests {
+			cfg.EnrichBudget = 96 * 1024
+		} else {
+			cfg.EnrichBudget = 32 * 1024
+		}
 	}
 
 	var ws statedir.WorkspaceDir
@@ -222,6 +226,11 @@ func (e *Engine) tryLoadIndex() (*index.Index, error) {
 	// specific subprocess) is the wrapper's responsibility.
 	return idx, nil
 }
+
+// EnrichBudget returns the resolved budget for this engine — either the
+// user-supplied Config.EnrichBudget or the auto-bumped default. Exposed
+// for tests and for callers introspecting their pipeline.
+func (e *Engine) EnrichBudget() int { return e.cfg.EnrichBudget }
 
 // logf writes a verbose log line to stderr. BundleLogSink intentionally
 // is NOT used here: that sink receives ONLY jsonl entries from
