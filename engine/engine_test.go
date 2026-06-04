@@ -149,6 +149,69 @@ func TestEngine_BundleLogSink(t *testing.T) {
 	}
 }
 
+// TestEngine_BundleLogIncludesExpansionStats locks the v1.1.1 fix:
+// when expansion runs, the bundle log entry MUST surface
+// expansion_by_strategy + expansion_dropped from result.Stats.
+// In v1.1.0 these fields were silently dropped because
+// assembleBundleLogEntry didn't accept or write them.
+func TestEngine_BundleLogIncludesExpansionStats(t *testing.T) {
+	var buf bytes.Buffer
+	ws := t.TempDir()
+	// Authenticate defined in auth.go, called from main.go + other.go.
+	mustWriteFile(t, ws, "auth.go", "package main\nfunc Authenticate(u string) error { return nil }\n")
+	mustWriteFile(t, ws, "main.go", "package main\nfunc main() { Authenticate(\"x\") }\n")
+	mustWriteFile(t, ws, "other.go", "package main\nfunc init() { Authenticate(\"init\") }\n")
+
+	prov := mock.New(cannedReview, 10, 20)
+	cfg := engine.Config{
+		Provider:      prov,
+		WorkspaceRoot: ws,
+		StateDir:      filepath.Join(t.TempDir(), "state"),
+		UseIndex:      true,
+		ExpandCallers: true,
+		BundleLogSink: &buf,
+	}
+	eng, err := engine.New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := eng.SyncIndex(); err != nil {
+		t.Fatalf("SyncIndex: %v", err)
+	}
+	bundle := diff.Bundle{
+		Diff: "diff --git a/main.go b/main.go\n--- a/main.go\n+++ b/main.go\n@@ -1,2 +1,3 @@\n package main\n func main() {\n+  Authenticate(\"extra\")\n }\n",
+	}
+	if _, err := eng.Review(context.Background(), bundle, engine.ReviewOptions{Mode: prompt.ModeStandard}); err != nil {
+		t.Fatalf("Review: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	last := lines[len(lines)-1]
+	var entry map[string]any
+	if err := json.Unmarshal([]byte(last), &entry); err != nil {
+		t.Fatalf("bundle log line should be JSON: %v", err)
+	}
+	stats, ok := entry["stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("entry.stats should be map, got %T", entry["stats"])
+	}
+	if _, ok := stats["expansion_by_strategy"]; !ok {
+		t.Errorf("v1.1.1 regression: expansion_by_strategy missing from bundle log stats; got keys %v", keys(stats))
+	}
+	byStrat, _ := stats["expansion_by_strategy"].(map[string]any)
+	if byStrat["caller"] == nil {
+		t.Errorf("expected caller count in expansion_by_strategy, got %v", byStrat)
+	}
+}
+
+func keys(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
 func TestEngine_ExpandCallersAttachesCallerFile(t *testing.T) {
 	ws := t.TempDir()
 	// Both files share package main so Go AST extractor finds the call ref

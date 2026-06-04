@@ -180,7 +180,7 @@ func (e *Engine) Review(ctx context.Context, bundle diff.Bundle, opts ReviewOpti
 		}
 
 		if e.cfg.BundleLogSink != nil {
-			entry := assembleBundleLogEntry(bundle, attachRes, rstats, e.stateWS, result.Stats.IndexHits, result.Stats.IndexMisses, result.Stats.ResolverPath)
+			entry := assembleBundleLogEntry(bundle, attachRes, rstats, e.stateWS, result.Stats.IndexHits, result.Stats.IndexMisses, result.Stats.ResolverPath, result.Stats.ExpansionByStrategy, result.Stats.ExpansionDropped)
 			_ = bundlelog.AppendTo(e.cfg.BundleLogSink, entry)
 		}
 	}
