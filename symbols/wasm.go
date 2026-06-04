@@ -761,6 +761,24 @@ const typescriptTags = `
 
 (import_clause
   (identifier) @name.reference.import)
+
+(required_parameter
+  type: (type_annotation (type_identifier) @name.reference.type))
+
+(optional_parameter
+  type: (type_annotation (type_identifier) @name.reference.type))
+
+(function_declaration
+  return_type: (type_annotation (type_identifier) @name.reference.type))
+
+(method_definition
+  return_type: (type_annotation (type_identifier) @name.reference.type))
+
+(arrow_function
+  return_type: (type_annotation (type_identifier) @name.reference.type))
+
+(variable_declarator
+  type: (type_annotation (type_identifier) @name.reference.type))
 `
 
 // pythonTags is the tags.scm query for Python (mirrors queries.PythonTags).
