@@ -1,0 +1,3 @@
+WASM grammar files (.wasm) are compiled by scripts/rebuild-grammars.sh.
+They are intentionally NOT committed to git until v0.12.1.
+See docs/superpowers/specs/2026-06-03-v0.12-pre-flight-inclusion-design.md §13.
