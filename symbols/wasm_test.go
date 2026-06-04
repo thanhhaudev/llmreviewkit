@@ -129,3 +129,42 @@ func TestExtractPythonViaWalk_EmitsSymTypeRef(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractPHPViaWalk_EmitsSymTypeRef(t *testing.T) {
+	ctx := context.Background()
+	r, err := treesitter.NewRuntime(ctx)
+	if err != nil {
+		t.Skipf("runtime: %v", err)
+	}
+	defer r.Close(ctx)
+	wasmPath := "../test-fixtures/tree-sitter-php.wasm"
+	data, err := os.ReadFile(wasmPath)
+	if err != nil {
+		t.Skipf("php grammar fixture not present: %v", err)
+	}
+	lang, err := r.LoadGrammar(ctx, "php", data)
+	if err != nil {
+		t.Fatalf("LoadGrammar: %v", err)
+	}
+	defer lang.Close(ctx)
+
+	src := []byte(`<?php
+function f(Foo $x, ?Bar $y): Baz {
+    $z = new Bar();
+    return new Baz();
+}
+`)
+	syms := extractPHPViaWalk(ctx, lang, src, "f.php")
+
+	names := map[string]int{}
+	for _, s := range syms {
+		if s.Kind == SymTypeRef {
+			names[s.Name]++
+		}
+	}
+	for _, name := range []string{"Foo", "Bar", "Baz"} {
+		if names[name] == 0 {
+			t.Errorf("expected SymTypeRef for %s, got names=%v", name, names)
+		}
+	}
+}

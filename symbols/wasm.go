@@ -545,6 +545,9 @@ func extractPHPViaWalk(ctx context.Context, lang *treesitter.Language, content [
 	// Field IDs.
 	nameFieldID := lang.FieldIDForName(ctx, "name")
 	functionFieldID := lang.FieldIDForName(ctx, "function")
+	// v1.1.0: type-hint field IDs for SymTypeRef emission.
+	parametersFieldID := lang.FieldIDForName(ctx, "parameters")
+	returnTypeFieldID := lang.FieldIDForName(ctx, "return_type")
 
 	matchIDs := make([]uint16, 0, 16)
 	for _, id := range []uint16{
@@ -587,6 +590,35 @@ func extractPHPViaWalk(ctx context.Context, lang *treesitter.Language, content [
 		case fnDefID, methodDeclID, classDeclID, interfaceDeclID, traitDeclID:
 			if s, e, ok := lang.NodeChildByFieldID(ctx, tree, n.NodeRaw[:], nameFieldID); ok {
 				emit(sliceBytes(content, s, e), SymDef, s)
+			}
+			// v1.1.0 — emit SymTypeRef for parameter type hints + return type hint.
+			// Only meaningful for function/method nodes (not class/interface/trait).
+			if n.TypeID == fnDefID || n.TypeID == methodDeclID {
+				if parametersFieldID != 0 {
+					if ps, pe, ok := lang.NodeChildByFieldID(ctx, tree, n.NodeRaw[:], parametersFieldID); ok {
+						paramText := sliceBytes(content, ps, pe)
+						for _, name := range extractPythonTypeNames(paramText) {
+							// Skip PHP pseudo-constants that match the CamelCase pattern.
+							switch name {
+							case "True", "False", "Null":
+								continue
+							}
+							emit(name, SymTypeRef, ps)
+						}
+					}
+				}
+				if returnTypeFieldID != 0 {
+					if rs, re_, ok := lang.NodeChildByFieldID(ctx, tree, n.NodeRaw[:], returnTypeFieldID); ok {
+						rtText := sliceBytes(content, rs, re_)
+						for _, name := range extractPythonTypeNames(rtText) {
+							switch name {
+							case "True", "False", "Null":
+								continue
+							}
+							emit(name, SymTypeRef, rs)
+						}
+					}
+				}
 			}
 		case useClauseID:
 			// First named child is a qualified_name or name. Emit its full text
