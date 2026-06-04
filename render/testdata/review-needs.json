@@ -1,0 +1,30 @@
+{
+  "verdict": "needs-attention",
+  "summary": "Two issues: a race condition and a SQL injection vulnerability.",
+  "findings": [
+    {
+      "severity": "critical",
+      "title": "Race condition: mutex removed",
+      "body": "Concurrent map writes without locking will panic in Go.",
+      "file": "auth.go",
+      "line_start": 35,
+      "line_end": 37,
+      "confidence": 1.0,
+      "recommendation": "Restore s.mu.Lock() / defer s.mu.Unlock()."
+    },
+    {
+      "severity": "high",
+      "title": "SQL injection",
+      "body": "User input is concatenated into the query string.",
+      "file": "auth.go",
+      "line_start": 50,
+      "line_end": 52,
+      "confidence": 0.95,
+      "recommendation": "Use db.QueryRow with $1 placeholder."
+    }
+  ],
+  "next_steps": [
+    "Restore the mutex lock",
+    "Use parameterized SQL"
+  ]
+}
