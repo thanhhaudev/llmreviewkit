@@ -192,9 +192,26 @@ func TestExtractTypeScriptQuery_EmitsSymTypeRef(t *testing.T) {
   return new Baz();
 }
 `)
-	ex := &wasmExtractor{grammarName: "typescript"}
-	syms := ex.Extract("f.ts", src)
-	_ = lang // lang loaded above is only to surface grammar-fixture failures via Skip; Extract loads via cache
+
+	// Run the TS query path directly against this test's own runtime+grammar
+	// instead of going through wasmExtractor (which caches grammars in a
+	// package-level langCache that gets polluted by prior python/php loads
+	// in the same process — same dlmalloc trap CLAUDE.md warned about).
+	q, err := lang.NewQuery(ctx, typescriptTags)
+	if err != nil {
+		t.Fatalf("NewQuery: %v", err)
+	}
+	defer q.Close(ctx)
+	tree, err := lang.Parse(ctx, src)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	defer tree.Close(ctx)
+	caps, err := q.Exec(ctx, tree.RootNode(ctx))
+	if err != nil {
+		t.Fatalf("Exec: %v", err)
+	}
+	syms := scanCaptures(caps, src, "f.ts")
 
 	names := map[string]int{}
 	for _, s := range syms {
