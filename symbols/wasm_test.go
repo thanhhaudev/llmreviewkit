@@ -168,3 +168,43 @@ function f(Foo $x, ?Bar $y): Baz {
 		}
 	}
 }
+
+func TestExtractTypeScriptQuery_EmitsSymTypeRef(t *testing.T) {
+	ctx := context.Background()
+	r, err := treesitter.NewRuntime(ctx)
+	if err != nil {
+		t.Skipf("runtime: %v", err)
+	}
+	defer r.Close(ctx)
+	wasmPath := "../test-fixtures/tree-sitter-typescript.wasm"
+	data, err := os.ReadFile(wasmPath)
+	if err != nil {
+		t.Skipf("typescript grammar fixture not present: %v", err)
+	}
+	lang, err := r.LoadGrammar(ctx, "typescript", data)
+	if err != nil {
+		t.Fatalf("LoadGrammar: %v", err)
+	}
+	defer lang.Close(ctx)
+
+	src := []byte(`function f(x: Foo, y: Bar): Baz {
+  const z: Bar = null;
+  return new Baz();
+}
+`)
+	ex := &wasmExtractor{grammarName: "typescript"}
+	syms := ex.Extract("f.ts", src)
+	_ = lang // lang loaded above is only to surface grammar-fixture failures via Skip; Extract loads via cache
+
+	names := map[string]int{}
+	for _, s := range syms {
+		if s.Kind == SymTypeRef {
+			names[s.Name]++
+		}
+	}
+	for _, name := range []string{"Foo", "Bar", "Baz"} {
+		if names[name] == 0 {
+			t.Errorf("expected SymTypeRef for %s, got names=%v", name, names)
+		}
+	}
+}
