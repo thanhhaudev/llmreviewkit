@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"runtime"
 	"time"
 )
 
@@ -26,6 +27,10 @@ func TestWriteJSON_AtomicAndReadable(t *testing.T) {
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatalf("stat: %v", err)
+	}
+	if runtime.GOOS == "windows" {
+		t.Logf("file mode assertion skipped on Windows (got %v)", info.Mode().Perm())
+		return
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("want mode 0600, got %v", info.Mode().Perm())
