@@ -82,6 +82,43 @@ func TestAppendWithRotation_EmptyPathIsNoop(t *testing.T) {
 	}
 }
 
+func TestStats_V1_1_0_Fields(t *testing.T) {
+	s := Stats{
+		Extracted: 10,
+		Filtered:  8,
+		Resolved:  5,
+		ExpansionByStrategy: map[string]int{"caller": 2, "test": 1},
+		ExpansionDropped:    3,
+	}
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	got := string(b)
+	for _, want := range []string{
+		`"expansion_by_strategy":`,
+		`"caller":2`,
+		`"test":1`,
+		`"expansion_dropped":3`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %s in JSON: %s", want, got)
+		}
+	}
+}
+
+func TestStats_V1_1_0_OmittedWhenZero(t *testing.T) {
+	s := Stats{Extracted: 5}
+	b, _ := json.Marshal(s)
+	got := string(b)
+	if strings.Contains(got, "expansion_by_strategy") {
+		t.Errorf("expansion_by_strategy should be omitempty when zero/nil")
+	}
+	if strings.Contains(got, "expansion_dropped") {
+		t.Errorf("expansion_dropped should be omitempty when zero")
+	}
+}
+
 func TestStats_NewV0_13Fields(t *testing.T) {
 	s := Stats{
 		Extracted: 10, Filtered: 8, Resolved: 5,

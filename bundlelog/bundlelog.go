@@ -41,6 +41,9 @@ type Stats struct {
 	IndexHits    int    `json:"index_hits,omitempty"`
 	IndexMisses  int    `json:"index_misses,omitempty"`
 	ResolverPath string `json:"resolver_path,omitempty"`
+	// v1.1.0 additions (omitempty so v1.0.0 jsonl entries continue to parse):
+	ExpansionByStrategy map[string]int `json:"expansion_by_strategy,omitempty"`
+	ExpansionDropped    int            `json:"expansion_dropped,omitempty"`
 }
 
 // AppendTo writes one jsonl record to sink. Returns the marshal/write error so
