@@ -43,6 +43,8 @@ func assembleBundleLogEntry(
 	ws statedir.WorkspaceDir,
 	indexHits, indexMisses int,
 	resolverPath string,
+	expansionByStrategy map[string]int,
+	expansionDropped int,
 ) bundlelog.Entry {
 	diffOnlyPaths := diff.DiffOnlyPaths(bundle)
 	bundleList := make([]diff.ReferencedFileLogEntry, 0, len(diffOnlyPaths)+len(bundle.Untracked)+len(attachRes.Files))
@@ -81,9 +83,11 @@ func assembleBundleLogEntry(
 			Dropped:      attachRes.Dropped,
 			BudgetBytes:  attachRes.BudgetBytes,
 			UsedBytes:    attachRes.UsedBytes,
-			IndexHits:    indexHits,
-			IndexMisses:  indexMisses,
-			ResolverPath: resolverPath,
+			IndexHits:           indexHits,
+			IndexMisses:         indexMisses,
+			ResolverPath:        resolverPath,
+			ExpansionByStrategy: expansionByStrategy,
+			ExpansionDropped:    expansionDropped,
 		},
 	}
 }
