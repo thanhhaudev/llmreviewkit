@@ -135,6 +135,11 @@ func WalkWorkspace(ws string) ([]string, error) {
 		if err != nil {
 			return nil
 		}
+		// Normalize to forward slashes so callers get consistent paths
+		// across Unix and Windows. The index stores repo-relative paths
+		// as strings; downstream consumers (resolver lookup, bundle log)
+		// expect "a/b/c.go" not "a\\b\\c.go".
+		rel = filepath.ToSlash(rel)
 		if LangForPath(rel) == "" {
 			return nil
 		}
