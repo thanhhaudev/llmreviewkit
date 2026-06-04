@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"runtime"
 )
 
 func TestResolve_DeterministicAndIsolated(t *testing.T) {
@@ -46,6 +47,12 @@ func TestWriteAtomic_RoundtripAndMode(t *testing.T) {
 		t.Fatalf("content: %q", got)
 	}
 	info, _ := os.Stat(path)
+	// Windows doesn't honor Unix permission bits via os.Chmod; the OS
+	// always reports 0666 minus the umask. Skip the mode assertion there.
+	if runtime.GOOS == "windows" {
+		t.Logf("file mode assertion skipped on Windows (got %v)", info.Mode().Perm())
+		return
+	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("mode: want 0600, got %v", info.Mode().Perm())
 	}
