@@ -195,3 +195,32 @@ func main() { f().method() }
 		}
 	}
 }
+
+func TestGoAST_EmitsSymTypeRefForFunctionSignature(t *testing.T) {
+	src := []byte(`package x
+
+type Foo struct{}
+type Bar struct{}
+
+func F(a Foo, b *Bar) Foo {
+	var c Bar
+	_ = c
+	return Foo{}
+}
+`)
+	ex := &GoASTExtractor{}
+	syms := ex.Extract("x.go", src)
+
+	names := map[string]int{}
+	for _, s := range syms {
+		if s.Kind == SymTypeRef {
+			names[s.Name]++
+		}
+	}
+	if names["Foo"] < 2 {
+		t.Errorf("expected Foo SymTypeRef at least twice (param + return), got %d", names["Foo"])
+	}
+	if names["Bar"] < 2 {
+		t.Errorf("expected Bar SymTypeRef at least twice (param + var), got %d", names["Bar"])
+	}
+}
