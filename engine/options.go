@@ -82,6 +82,44 @@ type Config struct {
 	// expand.DefaultRankerWeights(). Provided as a pointer so "not set"
 	// is unambiguous from "all zeros".
 	RankerWeights *expand.RankerWeights
+
+	// === v1.2.0 additions ===
+
+	// SkipEnrichment, when true, disables the entire workspace symbol
+	// enrichment pipeline (extraction + resolver + referenced-file
+	// attachment). The review proceeds with the bundle's diff content
+	// only.
+	//
+	// Use this on monorepos where the WASM tree-sitter walker would
+	// spin the binary at 100% CPU for minutes per call. Empirically the
+	// walker scales O(symbols × workspace_files), so a Laravel project
+	// with thousands of PHP classes can stall reviews indefinitely.
+	//
+	// Equivalent to leaving WorkspaceRoot empty in v1.0/v1.1 (the
+	// implicit gate inside Review), but explicit, named, and documented.
+	// Prefer this field over blanking WorkspaceRoot — the latter also
+	// disables index sync and other workspace-aware features that
+	// callers may still want.
+	//
+	// Default false (enrichment enabled when WorkspaceRoot is set).
+	SkipEnrichment bool
+
+	// WorkspaceFileCap is the maximum tracked-file count above which the
+	// engine auto-skips enrichment and emits a warning via Verbose. 0
+	// means no cap (preserves v1.0/v1.1 behavior). The count is obtained
+	// once per Review() call via `git ls-files -z`; sub-second on any
+	// repo we've measured.
+	//
+	// Independent of SkipEnrichment: with the cap set, normal-sized
+	// workspaces still get full enrichment; only oversize ones are
+	// auto-degraded.
+	//
+	// Recommended values:
+	//   - 0     — keep current behavior (default)
+	//   - 3000  — empirically safe for Laravel/Django monorepos
+	//
+	// Default 0.
+	WorkspaceFileCap int
 }
 
 // ReviewOptions are per-call parameters.

@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"bytes"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -9,6 +11,45 @@ import (
 	"github.com/thanhhaudev/llmreviewkit/resolver"
 	"github.com/thanhhaudev/llmreviewkit/statedir"
 )
+
+// shouldEnrich is the v1.2.0 gate for the enrichment pipeline. It folds
+// in the legacy "WorkspaceRoot non-empty" check from engine.go:117, the
+// new SkipEnrichment kill switch, and the optional WorkspaceFileCap
+// auto-degrade. Returns false (with a verbose log on auto-degrade) when
+// the call should skip extraction + resolver + attachment.
+func (e *Engine) shouldEnrich(bundle diff.Bundle) bool {
+	if e.cfg.WorkspaceRoot == "" {
+		return false
+	}
+	if e.cfg.SkipEnrichment {
+		return false
+	}
+	if len(bundle.Diff) == 0 && len(bundle.Untracked) == 0 {
+		return false
+	}
+	if e.cfg.WorkspaceFileCap > 0 {
+		if count, ok := countTrackedFiles(e.cfg.WorkspaceRoot); ok && count > e.cfg.WorkspaceFileCap {
+			e.logf("[warn] workspace has %d tracked files (cap %d); auto-skipping enrichment to avoid CPU spin",
+				count, e.cfg.WorkspaceFileCap)
+			return false
+		}
+	}
+	return true
+}
+
+// countTrackedFiles returns the count of tracked files in the repo at
+// cwd, via `git ls-files -z`. Returns (count, true) on success or
+// (0, false) on any error — callers fail open (proceed with enrichment)
+// so a broken git environment doesn't accidentally degrade behavior.
+func countTrackedFiles(cwd string) (int, bool) {
+	cmd := exec.Command("git", "ls-files", "-z")
+	cmd.Dir = cwd
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, false
+	}
+	return bytes.Count(out, []byte{0}), true
+}
 
 // refsToInputs converts resolver.Reference to diff.ReferenceInput,
 // crossing the package boundary without an import cycle. Moved from

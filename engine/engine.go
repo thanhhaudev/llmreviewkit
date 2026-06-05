@@ -112,9 +112,10 @@ func (e *Engine) Review(ctx context.Context, bundle diff.Bundle, opts ReviewOpti
 	result := &Result{Stats: ResolveStats{ResolverPath: "v1"}}
 
 	// Enrichment — strictly additive: any failure → empty refs, review proceeds.
-	// WorkspaceRoot must be set (non-empty) to perform symbol extraction;
-	// without a real root there is nowhere to search for definitions.
-	if e.cfg.WorkspaceRoot != "" && (len(bundle.Diff) > 0 || len(bundle.Untracked) > 0) {
+	// Gated by shouldEnrich (v1.2.0): WorkspaceRoot non-empty AND
+	// SkipEnrichment false AND WorkspaceFileCap not exceeded AND there's
+	// something to enrich.
+	if e.shouldEnrich(bundle) {
 		symbols.SetWorkspaceRoot(e.cfg.WorkspaceRoot)
 		syms := symbols.ExtractFromBundle(bundle)
 		diffPaths := diff.Paths(bundle)
