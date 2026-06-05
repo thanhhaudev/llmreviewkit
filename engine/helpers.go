@@ -29,7 +29,7 @@ func (e *Engine) shouldEnrich(bundle diff.Bundle) bool {
 	}
 	if e.cfg.WorkspaceFileCap > 0 {
 		if count, ok := countTrackedFiles(e.cfg.WorkspaceRoot); ok && count > e.cfg.WorkspaceFileCap {
-			e.logf("[warn] workspace has %d tracked files (cap %d); auto-skipping enrichment to avoid CPU spin",
+			e.logf("[warn] workspace has %d tracked files (cap %d); auto-skipping enrichment to avoid CPU spin\n",
 				count, e.cfg.WorkspaceFileCap)
 			return false
 		}
