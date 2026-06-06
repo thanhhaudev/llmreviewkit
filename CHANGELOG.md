@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.5.1 — 2026-06-06
+
+### Added
+- `context` package — loads `.kizunax/review-context.md` (priority paths:
+  `.kizunax/`, `docs/`, root) with 8 KiB UTF-8-safe truncation. Exposes
+  ModTime so consumers can emit staleness warnings without re-statting.
+- `engine.ReviewOptions` gains `ReviewContext`, `ContextPath`, `ContextModTime`
+  fields.
+- `prompt.Build` accepts a `reviewContext` parameter and prepends a
+  "Prior review context" section to the system prompt, ordered ABOVE the
+  glossary section so behavioral hints take precedence.
+
+### Notes
+- Consumers (kizunax v0.27.0+) load the file and pass content via the new
+  options. The engine itself does not read disk.
+- File format is free-form markdown; engine treats verbatim, no parsing.
+
 ## v1.5.0 — 2026-06-06
 
 ### Added
