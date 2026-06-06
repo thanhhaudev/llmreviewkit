@@ -18,7 +18,7 @@ import (
 //
 //	0 = StrategyAuto
 //	1 = StrategyTreeSitter
-//	2 = StrategyGoNative
+//	2 = StrategyPhpsyms
 //	3 = StrategyRegex
 type extractionPolicyState struct {
 	php            int
@@ -31,7 +31,7 @@ var currentPolicy = extractionPolicyState{php: 0}
 // SetExtractionPolicy is called by engine.New() to mirror the engine.Config
 // policy into the symbols package, since symbols cannot import engine.
 // The phpStrategy argument encodes engine.ExtractionStrategy: 0=auto,
-// 1=treesitter, 2=gonative, 3=regex.
+// 1=treesitter, 2=phpsyms, 3=regex.
 // extractTimeout=0 disables the per-file timeout. maxFileSize=0 disables
 // the size cap.
 //
@@ -48,19 +48,19 @@ func SetExtractionPolicy(phpStrategy int, extractTimeout time.Duration, maxFileS
 // DispatchPHP routes PHP extraction through the configured strategy.
 // StrategyAuto (default 0) prefers phpsyms (Go-native) and falls back to
 // extractPHPViaWalk (tree-sitter) only on empty result. StrategyTreeSitter
-// always uses tree-sitter. StrategyGoNative always uses phpsyms.
+// always uses tree-sitter. StrategyPhpsyms always uses phpsyms.
 // StrategyRegex always uses regexFallback.
 //
 // After extraction completes, an ExtractEvent is fired via fireExtractEvent
 // (no-op when no observer is registered). The event reports the strategy
-// that ACTUALLY ran — for StrategyAuto this is 2 (GoNative) when phpsyms
+// that ACTUALLY ran — for StrategyAuto this is 2 (Phpsyms) when phpsyms
 // succeeds, or 1 (TreeSitter) when it falls back.
 //
 // Tree-sitter path is preserved until v1.8.0 (a wrap-up).
 func DispatchPHP(ctx context.Context, lang *treesitter.Language, content []byte, path string) []Symbol {
 	start := time.Now()
 	switch currentPolicy.php {
-	case 2: // StrategyGoNative
+	case 2: // StrategyPhpsyms
 		syms := ExtractPHPViaPhpsyms(path, content)
 		fireExtractEvent(path, 2, time.Since(start))
 		return syms
@@ -79,7 +79,7 @@ func DispatchPHP(ctx context.Context, lang *treesitter.Language, content []byte,
 			fireExtractEvent(path, 1, time.Since(start)) // fell back to TreeSitter
 			return syms
 		}
-		fireExtractEvent(path, 2, time.Since(start)) // GoNative succeeded
+		fireExtractEvent(path, 2, time.Since(start)) // Phpsyms succeeded
 		return syms
 	}
 }

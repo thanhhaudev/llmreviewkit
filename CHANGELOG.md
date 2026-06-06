@@ -4,7 +4,7 @@
 
 ### Added
 - `engine.ExtractionPolicy` — per-language extractor strategy choice
-  (`PHP: StrategyAuto|TreeSitter|GoNative|Regex`), per-file extraction
+  (`PHP: StrategyAuto|TreeSitter|Phpsyms|Regex`), per-file extraction
   timeout (default 60s), and max file size cap (default 64 KiB).
 - `symbols.DispatchPHP` — strategy-routed PHP extraction. Auto path prefers
   the Go-native phpsyms extractor and falls back to tree-sitter only when

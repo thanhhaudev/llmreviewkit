@@ -28,13 +28,13 @@ func TestDispatchPHP_DefaultAuto_UsesPhpsyms(t *testing.T) {
 	}
 }
 
-func TestDispatchPHP_GoNative_UsesPhpsyms(t *testing.T) {
+func TestDispatchPHP_Phpsyms_RunsPhpsyms(t *testing.T) {
 	t.Cleanup(func() { SetExtractionPolicy(0, 0, 0) })
-	SetExtractionPolicy(2, 0, 0) // StrategyGoNative
+	SetExtractionPolicy(2, 0, 0) // StrategyPhpsyms
 	src := []byte("<?php class Foo {}")
 	syms := DispatchPHP(nil, nil, src, "Foo.php")
 	if len(syms) == 0 {
-		t.Fatal("gonative strategy returned no symbols")
+		t.Fatal("phpsyms strategy returned no symbols")
 	}
 }
 
@@ -112,7 +112,7 @@ func TestDispatchPHP_FiresObserver(t *testing.T) {
 		SetExtractionPolicy(0, 0, 0)
 		SetExtractObserver(nil)
 	})
-	SetExtractionPolicy(2, 0, 0) // GoNative
+	SetExtractionPolicy(2, 0, 0) // Phpsyms
 	var events []ExtractEvent
 	SetExtractObserver(func(e ExtractEvent) {
 		events = append(events, e)
@@ -125,7 +125,7 @@ func TestDispatchPHP_FiresObserver(t *testing.T) {
 		t.Errorf("event.File: %q", events[0].File)
 	}
 	if events[0].Strategy != 2 {
-		t.Errorf("event.Strategy: got %d, want 2 (GoNative)", events[0].Strategy)
+		t.Errorf("event.Strategy: got %d, want 2 (Phpsyms)", events[0].Strategy)
 	}
 	if events[0].Duration <= 0 {
 		t.Errorf("event.Duration: %v should be > 0", events[0].Duration)
@@ -143,7 +143,7 @@ func TestExtractStrategyName(t *testing.T) {
 	cases := map[int]string{
 		0:  "auto",
 		1:  "treesitter",
-		2:  "gonative",
+		2:  "phpsyms",
 		3:  "regex",
 		99: "unknown",
 	}
