@@ -22,3 +22,30 @@ func SetWorkspaceRoot(_ string) {}
 // phpsyms-backed path live in policy.go (!lite). Engine.New() calls this
 // unconditionally; the lite stub keeps that call site building.
 func SetExtractionPolicy(_ int, _ time.Duration, _ int) {}
+
+// ExtractEvent stub mirrors the !lite type so engine code can compile.
+// In lite builds DispatchPHP is absent, so this is never fired.
+type ExtractEvent struct {
+	File     string
+	Strategy int
+	Duration time.Duration
+}
+
+// ExtractStrategyName mirrors the !lite implementation.
+func ExtractStrategyName(strategy int) string {
+	switch strategy {
+	case 0:
+		return "auto"
+	case 1:
+		return "treesitter"
+	case 2:
+		return "gonative"
+	case 3:
+		return "regex"
+	}
+	return "unknown"
+}
+
+// SetExtractObserver is a no-op in lite builds — DispatchPHP is absent so
+// no events would fire. Stub preserves the call site in engine/kizunax.
+func SetExtractObserver(_ func(ExtractEvent)) {}

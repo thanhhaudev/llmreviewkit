@@ -51,20 +51,35 @@ func SetExtractionPolicy(phpStrategy int, extractTimeout time.Duration, maxFileS
 // always uses tree-sitter. StrategyGoNative always uses phpsyms.
 // StrategyRegex always uses regexFallback.
 //
+// After extraction completes, an ExtractEvent is fired via fireExtractEvent
+// (no-op when no observer is registered). The event reports the strategy
+// that ACTUALLY ran — for StrategyAuto this is 2 (GoNative) when phpsyms
+// succeeds, or 1 (TreeSitter) when it falls back.
+//
 // Tree-sitter path is preserved until v1.8.0 (a wrap-up).
 func DispatchPHP(ctx context.Context, lang *treesitter.Language, content []byte, path string) []Symbol {
+	start := time.Now()
 	switch currentPolicy.php {
 	case 2: // StrategyGoNative
-		return ExtractPHPViaPhpsyms(path, content)
+		syms := ExtractPHPViaPhpsyms(path, content)
+		fireExtractEvent(path, 2, time.Since(start))
+		return syms
 	case 1: // StrategyTreeSitter
-		return extractPHPViaWalk(ctx, lang, content, path)
+		syms := extractPHPViaWalk(ctx, lang, content, path)
+		fireExtractEvent(path, 1, time.Since(start))
+		return syms
 	case 3: // StrategyRegex
-		return regexFallback(path, content)
+		syms := regexFallback(path, content)
+		fireExtractEvent(path, 3, time.Since(start))
+		return syms
 	default: // StrategyAuto
 		syms := ExtractPHPViaPhpsyms(path, content)
 		if len(syms) == 0 {
-			return extractPHPViaWalk(ctx, lang, content, path)
+			syms = extractPHPViaWalk(ctx, lang, content, path)
+			fireExtractEvent(path, 1, time.Since(start)) // fell back to TreeSitter
+			return syms
 		}
+		fireExtractEvent(path, 2, time.Since(start)) // GoNative succeeded
 		return syms
 	}
 }
