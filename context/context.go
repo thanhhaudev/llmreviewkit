@@ -27,17 +27,28 @@ type Context struct {
 	ModTime   time.Time // file mtime, zero if no file
 }
 
-var candidatePaths = []string{
-	filepath.Join(".kizunax", "review-context.md"),
-	filepath.Join("docs", "review-context.md"),
-	"REVIEW-CONTEXT.md",
+// DefaultPaths returns the default candidate paths searched by Load when
+// the caller passes nil. Order is priority-descending. The `.kizunax/`
+// path is intentionally excluded — that path belongs to the consumer
+// (kizunax), not this library. Consumers that want it should compose:
+//
+//	paths := append([]string{".kizunax/review-context.md"}, context.DefaultPaths()...)
+//	c, err := context.Load(workspaceRoot, paths)
+func DefaultPaths() []string {
+	return []string{
+		filepath.Join("docs", "review-context.md"),
+		"REVIEW-CONTEXT.md",
+	}
 }
 
-// Load searches workspaceRoot for review-context.md in priority order
-// (.kizunax/review-context.md > docs/review-context.md > REVIEW-CONTEXT.md)
-// and returns the verbatim content capped at 8 KiB. No file found →
-// empty Context, nil error.
-func Load(workspaceRoot string) (Context, error) {
+// Load searches workspaceRoot for review-context.md in the order given
+// by candidatePaths and returns the verbatim content capped at 8 KiB.
+// Passing nil candidatePaths uses DefaultPaths(). No file found → empty
+// Context, nil error.
+func Load(workspaceRoot string, candidatePaths []string) (Context, error) {
+	if candidatePaths == nil {
+		candidatePaths = DefaultPaths()
+	}
 	for _, rel := range candidatePaths {
 		abs := filepath.Join(workspaceRoot, rel)
 		info, err := os.Stat(abs)

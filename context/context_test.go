@@ -11,7 +11,7 @@ import (
 
 func TestLoad_NoFile_ReturnsEmpty(t *testing.T) {
 	dir := t.TempDir()
-	c, err := Load(dir)
+	c, err := Load(dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,7 +37,7 @@ func mustWrite(t *testing.T, p, content string) {
 	}
 }
 
-func TestLoad_PriorityKizunaxFirst(t *testing.T) {
+func TestLoad_RespectsCallerProvidedPriority(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, ".kizunax"))
 	mustWrite(t, filepath.Join(dir, ".kizunax", "review-context.md"), "kizunax-wins")
@@ -45,7 +45,11 @@ func TestLoad_PriorityKizunaxFirst(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "docs", "review-context.md"), "docs-loses")
 	mustWrite(t, filepath.Join(dir, "REVIEW-CONTEXT.md"), "upper-loses")
 
-	c, err := Load(dir)
+	c, err := Load(dir, []string{
+		filepath.Join(".kizunax", "review-context.md"),
+		filepath.Join("docs", "review-context.md"),
+		"REVIEW-CONTEXT.md",
+	})
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -63,7 +67,7 @@ func TestLoad_PriorityDocsBeforeUpper(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "docs", "review-context.md"), "docs-wins")
 	mustWrite(t, filepath.Join(dir, "REVIEW-CONTEXT.md"), "upper-loses")
 
-	c, _ := Load(dir)
+	c, _ := Load(dir, DefaultPaths())
 	if c.Content != "docs-wins" {
 		t.Fatalf("expected docs-wins, got %q", c.Content)
 	}
@@ -72,7 +76,7 @@ func TestLoad_PriorityDocsBeforeUpper(t *testing.T) {
 func TestLoad_UpperFallback(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "REVIEW-CONTEXT.md"), "upper-only")
-	c, _ := Load(dir)
+	c, _ := Load(dir, DefaultPaths())
 	if c.Content != "upper-only" {
 		t.Fatalf("expected upper-only, got %q", c.Content)
 	}
@@ -83,7 +87,7 @@ func TestLoad_ModTimeExposed(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "REVIEW-CONTEXT.md"), "with-time")
 	before := time.Now().Add(-time.Minute)
 
-	c, _ := Load(dir)
+	c, _ := Load(dir, DefaultPaths())
 	if c.ModTime.IsZero() {
 		t.Fatalf("expected non-zero ModTime")
 	}
@@ -96,7 +100,7 @@ func TestLoad_TruncatesOver8KiB(t *testing.T) {
 	dir := t.TempDir()
 	huge := strings.Repeat("a", maxContextBytes+5_000)
 	mustWrite(t, filepath.Join(dir, "REVIEW-CONTEXT.md"), huge)
-	c, err := Load(dir)
+	c, err := Load(dir, DefaultPaths())
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -115,7 +119,7 @@ func TestLoad_TruncatesAtRuneBoundary_NotMidRune(t *testing.T) {
 	huge := strings.Repeat("ế", maxContextBytes)
 	mustWrite(t, filepath.Join(dir, "REVIEW-CONTEXT.md"), huge)
 
-	c, err := Load(dir)
+	c, err := Load(dir, DefaultPaths())
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -133,7 +137,7 @@ func TestLoad_TruncatesAtRuneBoundary_NotMidRune(t *testing.T) {
 func TestLoad_ZeroByteFile_ReturnsEmptyContentButRecordsPath(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "REVIEW-CONTEXT.md"), "")
-	c, _ := Load(dir)
+	c, _ := Load(dir, DefaultPaths())
 	if c.Content != "" {
 		t.Fatalf("expected empty content, got %q", c.Content)
 	}
@@ -145,11 +149,42 @@ func TestLoad_ZeroByteFile_ReturnsEmptyContentButRecordsPath(t *testing.T) {
 func TestLoad_DirectoryAtCandidatePath_Skipped(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, "REVIEW-CONTEXT.md")) // create as dir
-	c, err := Load(dir)
+	c, err := Load(dir, DefaultPaths())
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if c.Path != "" {
 		t.Fatalf("directory at candidate path should be skipped, got Path=%q", c.Path)
+	}
+}
+
+func TestLoad_CallerSuppliedPaths(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "custom.md"), "custom-context")
+
+	c, err := Load(dir, []string{"custom.md"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if c.Content != "custom-context" {
+		t.Fatalf("expected custom-context, got %q", c.Content)
+	}
+}
+
+func TestLoad_DefaultPaths_DoesNotIncludeKizunaxDir(t *testing.T) {
+	for _, p := range DefaultPaths() {
+		if strings.HasPrefix(p, ".kizunax") {
+			t.Fatalf("DefaultPaths() must not include .kizunax/ paths (consumer concern), got %q", p)
+		}
+	}
+}
+
+func TestLoad_NilPaths_UsesDefaults(t *testing.T) {
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, "docs"))
+	mustWrite(t, filepath.Join(dir, "docs", "review-context.md"), "docs-wins")
+	c, _ := Load(dir, nil)
+	if c.Content != "docs-wins" {
+		t.Fatalf("expected docs-wins via DefaultPaths(), got %q", c.Content)
 	}
 }
