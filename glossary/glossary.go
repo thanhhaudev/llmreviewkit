@@ -16,17 +16,29 @@ type Glossary struct {
 	Truncated bool
 }
 
-var candidatePaths = []string{
-	filepath.Join(".kizunax", "glossary.md"),
-	filepath.Join("docs", "glossary.md"),
-	"GLOSSARY.md",
+// DefaultPaths returns the default candidate paths searched by Load when
+// the caller passes nil. Order is priority-descending. The `.kizunax/`
+// path is intentionally excluded — that path belongs to the consumer
+// (kizunax), not this library. Consumers that want it should compose:
+//
+//	paths := append([]string{".kizunax/glossary.md"}, glossary.DefaultPaths()...)
+//	gloss, err := glossary.Load(workspaceRoot, paths)
+func DefaultPaths() []string {
+	return []string{
+		filepath.Join("docs", "glossary.md"),
+		"GLOSSARY.md",
+	}
 }
 
-// Load searches workspaceRoot for a glossary file in priority order
-// (.kizunax/glossary.md > docs/glossary.md > GLOSSARY.md) and returns
-// the verbatim content capped at 16 KiB. No file found → empty Glossary.
-// Content is treated verbatim; no parsing.
-func Load(workspaceRoot string) (Glossary, error) {
+// Load searches workspaceRoot for a glossary file in the order given by
+// candidatePaths (caller decides priority) and returns the verbatim
+// content capped at 16 KiB. Passing nil candidatePaths uses DefaultPaths().
+// No file found → empty Glossary, nil error. Content is treated verbatim;
+// no parsing.
+func Load(workspaceRoot string, candidatePaths []string) (Glossary, error) {
+	if candidatePaths == nil {
+		candidatePaths = DefaultPaths()
+	}
 	for _, rel := range candidatePaths {
 		abs := filepath.Join(workspaceRoot, rel)
 		info, err := os.Stat(abs)
