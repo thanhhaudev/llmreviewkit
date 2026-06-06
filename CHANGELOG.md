@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.5.3 — 2026-06-06
+
+### Added
+- `resolver.FindReferences` accepts `scopePaths []string` as a new 4th
+  positional arg. When non-empty, the workspace walk is limited to the
+  union of those subtrees instead of the entire repo. Threaded through
+  `engine.ReviewOptions.ScopePaths` so consumers pass `--paths`-style scope
+  to the resolver. Empty-string scope entries are silently filtered.
+- `glossary.DefaultPaths()` and `context.DefaultPaths()` — exported
+  helpers returning the library's default candidate paths. Both exclude
+  `.kizunax/` (consumer concern).
+
+### Changed
+- `engine.ReviewOptions` gains `ScopePaths []string` (was originally
+  drafted as `Paths` but renamed pre-tag for clarity vs `bundle.Paths` /
+  `target.Paths`).
+- `glossary.Load` and `context.Load` signatures change from
+  `Load(workspaceRoot)` to `Load(workspaceRoot, candidatePaths []string)`.
+  Passing nil uses `DefaultPaths()`. Breaking for direct callers; the
+  fix in kizunax v0.28.0 is to pass `[]string{".kizunax/glossary.md",
+  "docs/glossary.md", "GLOSSARY.md"}` (and the review-context analogue)
+  explicitly at the call site.
+- `engine.shouldEnrich` now bypasses `WorkspaceFileCap` when scope is
+  set. Rationale: the cap exists to prevent whole-workspace CPU spins;
+  a scoped walk does not hit that hot path. Without this, Oneplat
+  (6062 files, cap 3000) would never benefit from `--paths`-scoped
+  reviews.
+
+### Notes
+- All internal call sites updated; tests pinned via the `-race`
+  detector locally before tag.
+
 ## v1.5.2 — 2026-06-06
 
 ### Fixed
