@@ -198,6 +198,16 @@ type ReviewOptions struct {
 	// warnings without re-statting the file.
 	ContextModTime time.Time
 
+	// ScopePaths is the optional list of repo-relative subtree paths to
+	// scope the resolver walk to. When empty, the resolver walks the full
+	// workspace (pre-v1.5.3 behavior). When set, only files under these
+	// subtrees are visited — used by kizunax to avoid whole-monorepo
+	// CPU spin when the user passes --paths.
+	//
+	// Empty-string entries are silently filtered (a `""` element would
+	// otherwise resolve to the workspace root and defeat the scope).
+	ScopePaths []string
+
 	// Model overrides the provider's default model name.
 	Model string
 
