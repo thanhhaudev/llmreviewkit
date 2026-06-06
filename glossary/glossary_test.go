@@ -10,7 +10,7 @@ import (
 
 func TestLoad_NoFile_ReturnsEmpty(t *testing.T) {
 	dir := t.TempDir()
-	g, err := Load(dir)
+	g, err := Load(dir, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -19,7 +19,7 @@ func TestLoad_NoFile_ReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestLoad_PriorityKizunaxFirst(t *testing.T) {
+func TestLoad_RespectsCallerProvidedPriority(t *testing.T) {
 	dir := t.TempDir()
 	mustMkdir(t, filepath.Join(dir, ".kizunax"))
 	mustWrite(t, filepath.Join(dir, ".kizunax", "glossary.md"), "kizunax-wins")
@@ -27,7 +27,11 @@ func TestLoad_PriorityKizunaxFirst(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "docs", "glossary.md"), "docs-loses")
 	mustWrite(t, filepath.Join(dir, "GLOSSARY.md"), "upper-loses")
 
-	g, err := Load(dir)
+	g, err := Load(dir, []string{
+		filepath.Join(".kizunax", "glossary.md"),
+		filepath.Join("docs", "glossary.md"),
+		"GLOSSARY.md",
+	})
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -45,7 +49,7 @@ func TestLoad_PriorityDocsBeforeUpper(t *testing.T) {
 	mustWrite(t, filepath.Join(dir, "docs", "glossary.md"), "docs-wins")
 	mustWrite(t, filepath.Join(dir, "GLOSSARY.md"), "upper-loses")
 
-	g, _ := Load(dir)
+	g, _ := Load(dir, DefaultPaths())
 	if g.Content != "docs-wins" {
 		t.Fatalf("expected docs-wins, got %q", g.Content)
 	}
@@ -54,7 +58,7 @@ func TestLoad_PriorityDocsBeforeUpper(t *testing.T) {
 func TestLoad_UpperFallback(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "GLOSSARY.md"), "upper-only")
-	g, _ := Load(dir)
+	g, _ := Load(dir, DefaultPaths())
 	if g.Content != "upper-only" {
 		t.Fatalf("expected upper-only, got %q", g.Content)
 	}
@@ -64,7 +68,7 @@ func TestLoad_TruncatesOver16KiB(t *testing.T) {
 	dir := t.TempDir()
 	huge := strings.Repeat("a", maxGlossaryBytes+5_000)
 	mustWrite(t, filepath.Join(dir, "GLOSSARY.md"), huge)
-	g, err := Load(dir)
+	g, err := Load(dir, DefaultPaths())
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -83,7 +87,7 @@ func TestLoad_TruncatesAtRuneBoundary_NotMidRune(t *testing.T) {
 	huge := strings.Repeat("ế", maxGlossaryBytes)
 	mustWrite(t, filepath.Join(dir, "GLOSSARY.md"), huge)
 
-	g, err := Load(dir)
+	g, err := Load(dir, DefaultPaths())
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -101,12 +105,43 @@ func TestLoad_TruncatesAtRuneBoundary_NotMidRune(t *testing.T) {
 func TestLoad_ZeroByteFile_ReturnsEmptyContent(t *testing.T) {
 	dir := t.TempDir()
 	mustWrite(t, filepath.Join(dir, "GLOSSARY.md"), "")
-	g, _ := Load(dir)
+	g, _ := Load(dir, DefaultPaths())
 	if g.Content != "" {
 		t.Fatalf("expected empty content, got %q", g.Content)
 	}
 	if g.Path == "" {
 		t.Fatalf("expected non-empty Path for 0-byte file (file existed)")
+	}
+}
+
+func TestLoad_CallerSuppliedPaths(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "custom.md"), "custom-content")
+
+	g, err := Load(dir, []string{"custom.md"})
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if g.Content != "custom-content" {
+		t.Fatalf("expected custom-content, got %q", g.Content)
+	}
+}
+
+func TestLoad_DefaultPaths_DoesNotIncludeKizunaxDir(t *testing.T) {
+	for _, p := range DefaultPaths() {
+		if strings.HasPrefix(p, ".kizunax") {
+			t.Fatalf("DefaultPaths() must not include .kizunax/ paths (consumer concern), got %q", p)
+		}
+	}
+}
+
+func TestLoad_NilPaths_UsesDefaults(t *testing.T) {
+	dir := t.TempDir()
+	mustMkdir(t, filepath.Join(dir, "docs"))
+	mustWrite(t, filepath.Join(dir, "docs", "glossary.md"), "docs-wins")
+	g, _ := Load(dir, nil)
+	if g.Content != "docs-wins" {
+		t.Fatalf("expected docs-wins via DefaultPaths(), got %q", g.Content)
 	}
 }
 
