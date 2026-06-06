@@ -182,6 +182,22 @@ type ReviewOptions struct {
 	// Glossary is optional inline glossary content (project-specific terms).
 	Glossary string
 
+	// ReviewContext is the body of the workspace's .kizunax/review-context.md.
+	// Engine injects it as a "Prior review context" section in the system
+	// prompt, ordered ABOVE glossary so behavioral hints take precedence.
+	// Empty = section is omitted entirely.
+	ReviewContext string
+
+	// ContextPath is the absolute path of the loaded review-context.md.
+	// Empty if no file was found. Surfaced for telemetry and stderr warnings;
+	// the engine itself does not use it.
+	ContextPath string
+
+	// ContextModTime is the file mtime of the loaded review-context.md.
+	// Zero if no file was found. Consumers use this to emit staleness
+	// warnings without re-statting the file.
+	ContextModTime time.Time
+
 	// Model overrides the provider's default model name.
 	Model string
 
