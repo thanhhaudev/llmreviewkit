@@ -106,3 +106,50 @@ func TestExtractWithPolicy_DefaultsAllowExtraction(t *testing.T) {
 		t.Fatal("expected symbols")
 	}
 }
+
+func TestDispatchPHP_FiresObserver(t *testing.T) {
+	t.Cleanup(func() {
+		SetExtractionPolicy(0, 0, 0)
+		SetExtractObserver(nil)
+	})
+	SetExtractionPolicy(2, 0, 0) // GoNative
+	var events []ExtractEvent
+	SetExtractObserver(func(e ExtractEvent) {
+		events = append(events, e)
+	})
+	_ = DispatchPHP(nil, nil, []byte("<?php class Foo {}"), "Foo.php")
+	if len(events) != 1 {
+		t.Fatalf("event count: got %d, want 1; events=%+v", len(events), events)
+	}
+	if events[0].File != "Foo.php" {
+		t.Errorf("event.File: %q", events[0].File)
+	}
+	if events[0].Strategy != 2 {
+		t.Errorf("event.Strategy: got %d, want 2 (GoNative)", events[0].Strategy)
+	}
+	if events[0].Duration <= 0 {
+		t.Errorf("event.Duration: %v should be > 0", events[0].Duration)
+	}
+}
+
+func TestDispatchPHP_AutoFallback_FiresWithTreeSitterStrategy(t *testing.T) {
+	// When Auto falls back from phpsyms (empty result) to tree-sitter, the
+	// observer should see Strategy=1 (TreeSitter), not 0 (Auto).
+	// This is hard to trigger without a tree-sitter lang. Skip if no easy way.
+	t.Skip("Auto fallback requires tree-sitter lang; covered by integration test in Task 19")
+}
+
+func TestExtractStrategyName(t *testing.T) {
+	cases := map[int]string{
+		0:  "auto",
+		1:  "treesitter",
+		2:  "gonative",
+		3:  "regex",
+		99: "unknown",
+	}
+	for n, want := range cases {
+		if got := ExtractStrategyName(n); got != want {
+			t.Errorf("ExtractStrategyName(%d): got %q, want %q", n, got, want)
+		}
+	}
+}

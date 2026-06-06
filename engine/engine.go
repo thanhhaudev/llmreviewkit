@@ -104,6 +104,16 @@ type ResolveStats struct {
 	// ExpansionDropped is the count of ranked candidates that fell
 	// outside EnrichBudget. Useful for tuning budget per workspace.
 	ExpansionDropped int
+
+	// ExtractorPath counts per-extractor-strategy invocations during this
+	// review. Populated when an extract observer is wired (Task 18).
+	// Keys: "auto", "treesitter", "gonative", "regex", "unknown".
+	// Zero map means no observer was wired or no extractions happened.
+	//
+	// Usage: before calling Review(), wire symbols.SetExtractObserver to
+	// accumulate events into a local map, then assign the map here after
+	// Review() returns.
+	ExtractorPath map[string]int
 }
 
 // Review runs the review pipeline on bundle and returns the parsed
