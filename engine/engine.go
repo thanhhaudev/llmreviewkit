@@ -204,7 +204,7 @@ func (e *Engine) Review(ctx context.Context, bundle diff.Bundle, opts ReviewOpti
 	}
 
 	// Build prompt.
-	pr, err := prompt.Build(e.cfg.PromptRoot, opts.Mode, bundle, schemaJSON, opts.Focus, opts.Glossary)
+	pr, err := prompt.Build(e.cfg.PromptRoot, opts.Mode, bundle, schemaJSON, opts.Focus, opts.Glossary, opts.ReviewContext)
 	if err != nil {
 		return nil, fmt.Errorf("engine: build prompt: %w", err)
 	}

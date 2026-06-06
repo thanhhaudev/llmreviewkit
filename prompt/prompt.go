@@ -44,11 +44,13 @@ const defaultSystem = "You are a senior code reviewer. Output ONLY valid JSON ma
 
 const glossarySectionTemplate = "## Project glossary\n\n%s\n\n---\n\n%s"
 
+const reviewContextSectionTemplate = "## Prior review context — apply when analyzing\n\n%s\n\nThese notes describe intentional patterns and constraints for this workspace. DO NOT flag patterns explicitly marked as intentional. When a finding overlaps with a suppressed category, omit it.\n\n---\n\n%s"
+
 // Build assembles the user prompt by interpolating the chosen template
 // with target label, schema, diff bundle, optional focus text, and optional glossary.
 // When glossary is non-empty it is prepended to the system prompt.
 // When pluginRoot is empty, the bundled embedded templates are used as defaults.
-func Build(pluginRoot string, mode Mode, bundle diff.Bundle, schemaJSON, focus, glossary string) (Prompt, error) {
+func Build(pluginRoot string, mode Mode, bundle diff.Bundle, schemaJSON, focus, glossary, reviewContext string) (Prompt, error) {
 	var rawTmpl string
 	if pluginRoot == "" {
 		// Library consumer didn't supply templates — use embedded defaults.
@@ -76,7 +78,11 @@ func Build(pluginRoot string, mode Mode, bundle diff.Bundle, schemaJSON, focus, 
 
 	system := defaultSystem
 	if strings.TrimSpace(glossary) != "" {
-		system = fmt.Sprintf(glossarySectionTemplate, glossary, defaultSystem)
+		system = fmt.Sprintf(glossarySectionTemplate, glossary, system)
+	}
+	if strings.TrimSpace(reviewContext) != "" {
+		// reviewContext goes ABOVE glossary so behavioral hints come first.
+		system = fmt.Sprintf(reviewContextSectionTemplate, reviewContext, system)
 	}
 
 	return Prompt{System: system, User: user}, nil
