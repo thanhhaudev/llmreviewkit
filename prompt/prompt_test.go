@@ -14,7 +14,7 @@ func TestBuild_GlossaryPrepended_WhenNonEmpty(t *testing.T) {
 	bundle := diff.Bundle{TargetLabel: "test"}
 	gloss := "Account = customer account, not bank account"
 
-	p, err := Build(root, ModeStandard, bundle, "{}", "", gloss)
+	p, err := Build(root, ModeStandard, bundle, "{}", "", gloss, "")
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestBuild_GlossaryOmitted_WhenEmpty(t *testing.T) {
 	root := setupFakePluginRoot(t)
 	bundle := diff.Bundle{TargetLabel: "test"}
 
-	p, err := Build(root, ModeStandard, bundle, "{}", "", "")
+	p, err := Build(root, ModeStandard, bundle, "{}", "", "", "")
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestBuild_GlossaryAppliesToAdversarial(t *testing.T) {
 	root := setupFakePluginRoot(t)
 	bundle := diff.Bundle{TargetLabel: "test"}
 
-	p, err := Build(root, ModeAdversarial, bundle, "{}", "", "GLOSSARY")
+	p, err := Build(root, ModeAdversarial, bundle, "{}", "", "GLOSSARY", "")
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestBuild_ReferencedFilesRendered(t *testing.T) {
 			},
 		},
 	}
-	p, err := Build(root, ModeStandard, bundle, "{}", "", "")
+	p, err := Build(root, ModeStandard, bundle, "{}", "", "", "")
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestBuild_ReferencedFilesRendered(t *testing.T) {
 func TestBuild_ReferencedFilesOmittedWhenEmpty(t *testing.T) {
 	root := setupFakePluginRoot(t)
 	bundle := diff.Bundle{TargetLabel: "test"} // no ReferencedFiles
-	p, _ := Build(root, ModeStandard, bundle, "{}", "", "")
+	p, _ := Build(root, ModeStandard, bundle, "{}", "", "", "")
 	if strings.Contains(p.User, "Referenced files for context") {
 		t.Fatalf("section must be absent when no referenced files")
 	}
@@ -120,7 +120,7 @@ func TestBuild_ReferencedFilesOmittedWhenEmpty(t *testing.T) {
 
 func TestBuild_EmbeddedFallbackOnEmptyPluginRoot(t *testing.T) {
 	bundle := diff.Bundle{Diff: "diff --git a/x.go b/x.go\n@@\n+x\n"}
-	p, err := Build("", ModeStandard, bundle, `{"type":"object"}`, "", "")
+	p, err := Build("", ModeStandard, bundle, `{"type":"object"}`, "", "", "")
 	if err != nil {
 		t.Fatalf("Build with empty pluginRoot should use embedded: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestBuild_CustomPluginRootOverridesEmbedded(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "prompts", "review.md"), []byte(custom), 0o644); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	p, err := Build(dir, ModeStandard, diff.Bundle{Diff: "marker-diff"}, "{}", "", "")
+	p, err := Build(dir, ModeStandard, diff.Bundle{Diff: "marker-diff"}, "{}", "", "", "")
 	if err != nil {
 		t.Fatalf("Build with custom pluginRoot: %v", err)
 	}
@@ -156,5 +156,25 @@ func TestBuild_CustomPluginRootOverridesEmbedded(t *testing.T) {
 	}
 	if !strings.Contains(p.User, "marker-diff") {
 		t.Fatalf("expected diff interpolation in custom template")
+	}
+}
+
+func TestBuild_ReviewContextPrepended_WhenNonEmpty(t *testing.T) {
+	root := setupFakePluginRoot(t)
+	bundle := diff.Bundle{TargetLabel: "test"}
+	ctx := "Treat belongsTo with array IDs as intentional."
+
+	p, err := Build(root, ModeStandard, bundle, "{}", "", "", ctx)
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if !strings.Contains(p.System, "Prior review context") {
+		t.Fatalf("expected context header in system: %q", p.System)
+	}
+	if !strings.Contains(p.System, ctx) {
+		t.Fatalf("expected context content in system: %q", p.System)
+	}
+	if !strings.Contains(p.System, "senior code reviewer") {
+		t.Fatalf("default system body lost: %q", p.System)
 	}
 }
