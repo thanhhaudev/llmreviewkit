@@ -107,7 +107,7 @@ type ResolveStats struct {
 
 	// ExtractorPath counts per-extractor-strategy invocations during this
 	// review. Populated when an extract observer is wired (Task 18).
-	// Keys: "auto", "treesitter", "gonative", "regex", "unknown".
+	// Keys: "auto", "treesitter", "phpsyms", "regex", "unknown".
 	// Zero map means no observer was wired or no extractions happened.
 	//
 	// Usage: before calling Review(), wire symbols.SetExtractObserver to

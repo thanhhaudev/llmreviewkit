@@ -39,7 +39,7 @@ func ExtractStrategyName(strategy int) string {
 	case 1:
 		return "treesitter"
 	case 2:
-		return "gonative"
+		return "phpsyms"
 	case 3:
 		return "regex"
 	}

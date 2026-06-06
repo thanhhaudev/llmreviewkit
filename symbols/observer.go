@@ -9,7 +9,7 @@ import "time"
 // underlying extractor returns.
 //
 // Strategy is the int encoding from policy.go (0=Auto 1=TreeSitter
-// 2=GoNative 3=Regex). Use ExtractStrategyName to render it.
+// 2=Phpsyms 3=Regex). Use ExtractStrategyName to render it.
 type ExtractEvent struct {
 	File     string
 	Strategy int
@@ -25,7 +25,7 @@ func ExtractStrategyName(strategy int) string {
 	case 1:
 		return "treesitter"
 	case 2:
-		return "gonative"
+		return "phpsyms"
 	case 3:
 		return "regex"
 	}

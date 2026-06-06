@@ -137,9 +137,9 @@ const (
 	StrategyAuto ExtractionStrategy = iota
 	// StrategyTreeSitter forces the tree-sitter (WASM grammar) path.
 	StrategyTreeSitter
-	// StrategyGoNative forces a Go-native implementation. Currently only
-	// supported for PHP (via phpsyms).
-	StrategyGoNative
+	// StrategyPhpsyms forces the Phpsyms (Go-native PHP) implementation.
+	// Currently only supported for PHP.
+	StrategyPhpsyms
 	// StrategyRegex forces the regex fallback (last resort).
 	StrategyRegex
 )
