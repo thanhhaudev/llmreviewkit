@@ -56,6 +56,13 @@ func New(cfg Config) (*Engine, error) {
 			return nil, fmt.Errorf("engine: resolve state dir: %w", resolveErr)
 		}
 	}
+	// Apply ExtractionPolicy — mirror into symbols package (no import cycle).
+	pol := cfg.ExtractionPolicy
+	if pol == (ExtractionPolicy{}) {
+		pol = DefaultExtractionPolicy()
+	}
+	symbols.SetExtractionPolicy(int(pol.PHP))
+
 	// If both WorkspaceRoot and StateWorkspaceOverride are unset, stateWS.Root
 	// is empty — enrichment and SyncIndex are both no-ops in that case.
 	return &Engine{cfg: cfg, stateWS: ws}, nil

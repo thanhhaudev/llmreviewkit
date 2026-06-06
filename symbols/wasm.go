@@ -163,7 +163,7 @@ func (e *wasmExtractor) Extract(path string, content []byte) []Symbol {
 		return extractPythonViaWalk(ctx, lang, content, path)
 	}
 	if e.grammarName == "php" {
-		return extractPHPViaWalk(ctx, lang, content, path)
+		return DispatchPHP(ctx, lang, content, path)
 	}
 
 	// IMPORTANT: NewQuery must be called BEFORE Parse — see Task 8 finding.
