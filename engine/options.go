@@ -120,6 +120,46 @@ type Config struct {
 	//
 	// Default 0.
 	WorkspaceFileCap int
+
+	// ExtractionPolicy controls per-language extractor strategy choice.
+	// Zero value means DefaultExtractionPolicy is applied.
+	ExtractionPolicy ExtractionPolicy
+}
+
+// ExtractionStrategy selects which extractor implementation runs for a file.
+// Used in ExtractionPolicy below.
+type ExtractionStrategy int
+
+const (
+	// StrategyAuto chooses the best available implementation per language.
+	// Currently: PHP → phpsyms (Go-native), with tree-sitter fallback on error.
+	StrategyAuto ExtractionStrategy = iota
+	// StrategyTreeSitter forces the tree-sitter (WASM grammar) path.
+	StrategyTreeSitter
+	// StrategyGoNative forces a Go-native implementation. Currently only
+	// supported for PHP (via phpsyms).
+	StrategyGoNative
+	// StrategyRegex forces the regex fallback (last resort).
+	StrategyRegex
+)
+
+// ExtractionPolicy controls per-language extractor strategy choice.
+// Engine.Config gains an ExtractionPolicy field; the zero value applies
+// DefaultExtractionPolicy.
+//
+// Theme D (timeout + size cap) wires into this in Task 16; this task adds
+// the strategy switch only.
+type ExtractionPolicy struct {
+	// PHP defaults to StrategyAuto (phpsyms preferred).
+	PHP ExtractionStrategy
+}
+
+// DefaultExtractionPolicy returns the policy applied when Config.ExtractionPolicy
+// is the zero value. PHP defaults to StrategyAuto.
+func DefaultExtractionPolicy() ExtractionPolicy {
+	return ExtractionPolicy{
+		PHP: StrategyAuto,
+	}
 }
 
 // ReviewOptions are per-call parameters.
