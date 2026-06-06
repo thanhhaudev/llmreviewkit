@@ -61,7 +61,7 @@ func New(cfg Config) (*Engine, error) {
 	if pol == (ExtractionPolicy{}) {
 		pol = DefaultExtractionPolicy()
 	}
-	symbols.SetExtractionPolicy(int(pol.PHP))
+	symbols.SetExtractionPolicy(int(pol.PHP), pol.ExtractionTimeout, pol.MaxFileSize)
 
 	// If both WorkspaceRoot and StateWorkspaceOverride are unset, stateWS.Root
 	// is empty — enrichment and SyncIndex are both no-ops in that case.

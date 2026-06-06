@@ -7,6 +7,7 @@ package engine
 
 import (
 	"io"
+	"time"
 
 	"github.com/thanhhaudev/llmreviewkit/expand"
 	"github.com/thanhhaudev/llmreviewkit/prompt"
@@ -146,19 +147,27 @@ const (
 // ExtractionPolicy controls per-language extractor strategy choice.
 // Engine.Config gains an ExtractionPolicy field; the zero value applies
 // DefaultExtractionPolicy.
-//
-// Theme D (timeout + size cap) wires into this in Task 16; this task adds
-// the strategy switch only.
 type ExtractionPolicy struct {
 	// PHP defaults to StrategyAuto (phpsyms preferred).
 	PHP ExtractionStrategy
+
+	// ExtractionTimeout caps per-file extraction. Zero means no cap.
+	// Default (set by DefaultExtractionPolicy) is 60 seconds.
+	ExtractionTimeout time.Duration
+
+	// MaxFileSize skips extraction for files larger than this many bytes.
+	// Zero means no cap. Default (set by DefaultExtractionPolicy) is 64 KiB.
+	MaxFileSize int
 }
 
 // DefaultExtractionPolicy returns the policy applied when Config.ExtractionPolicy
-// is the zero value. PHP defaults to StrategyAuto.
+// is the zero value. PHP defaults to StrategyAuto, ExtractionTimeout to 60s,
+// and MaxFileSize to 64 KiB.
 func DefaultExtractionPolicy() ExtractionPolicy {
 	return ExtractionPolicy{
-		PHP: StrategyAuto,
+		PHP:               StrategyAuto,
+		ExtractionTimeout: 60 * time.Second,
+		MaxFileSize:       64 * 1024,
 	}
 }
 
