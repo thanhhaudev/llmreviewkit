@@ -178,3 +178,50 @@ func TestBuild_ReviewContextPrepended_WhenNonEmpty(t *testing.T) {
 		t.Fatalf("default system body lost: %q", p.System)
 	}
 }
+
+func TestBuild_ReviewContextOmitted_WhenEmpty(t *testing.T) {
+	root := setupFakePluginRoot(t)
+	bundle := diff.Bundle{TargetLabel: "test"}
+
+	p, err := Build(root, ModeStandard, bundle, "{}", "", "", "")
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if strings.Contains(p.System, "Prior review context") {
+		t.Fatalf("context header should be absent when empty")
+	}
+}
+
+func TestBuild_ReviewContextOrderedAboveGlossary(t *testing.T) {
+	root := setupFakePluginRoot(t)
+	bundle := diff.Bundle{TargetLabel: "test"}
+
+	p, err := Build(root, ModeStandard, bundle, "{}", "", "GLOSSARY-MARKER", "CONTEXT-MARKER")
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	ci := strings.Index(p.System, "CONTEXT-MARKER")
+	gi := strings.Index(p.System, "GLOSSARY-MARKER")
+	if ci < 0 || gi < 0 {
+		t.Fatalf("missing marker(s); system=%q", p.System)
+	}
+	if ci >= gi {
+		t.Fatalf("review-context must appear BEFORE glossary; ci=%d gi=%d", ci, gi)
+	}
+}
+
+func TestBuild_ReviewContextAppliesToAdversarial(t *testing.T) {
+	root := setupFakePluginRoot(t)
+	bundle := diff.Bundle{TargetLabel: "test"}
+
+	p, err := Build(root, ModeAdversarial, bundle, "{}", "", "", "CONTEXT")
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if !strings.Contains(p.System, "Prior review context") {
+		t.Fatalf("expected context section in adversarial mode")
+	}
+	if !strings.Contains(p.System, "CONTEXT") {
+		t.Fatalf("expected context body in adversarial mode")
+	}
+}
