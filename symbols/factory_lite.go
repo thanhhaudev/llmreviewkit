@@ -2,6 +2,8 @@
 
 package symbols
 
+import "time"
+
 // useWASM always returns false in lite builds — WASM grammar files
 // are not embedded, so the factory falls back to RegexExtractor.
 func useWASM(ext string) bool { return false }
@@ -19,4 +21,4 @@ func SetWorkspaceRoot(_ string) {}
 // SetExtractionPolicy is a no-op in lite builds — DispatchPHP and the
 // phpsyms-backed path live in policy.go (!lite). Engine.New() calls this
 // unconditionally; the lite stub keeps that call site building.
-func SetExtractionPolicy(_ int) {}
+func SetExtractionPolicy(_ int, _ time.Duration, _ int) {}
