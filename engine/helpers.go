@@ -13,11 +13,17 @@ import (
 )
 
 // shouldEnrich is the v1.2.0 gate for the enrichment pipeline. It folds
-// in the legacy "WorkspaceRoot non-empty" check from engine.go:117, the
-// new SkipEnrichment kill switch, and the optional WorkspaceFileCap
-// auto-degrade. Returns false (with a verbose log on auto-degrade) when
-// the call should skip extraction + resolver + attachment.
-func (e *Engine) shouldEnrich(bundle diff.Bundle) bool {
+// in the legacy "WorkspaceRoot non-empty" check, the SkipEnrichment kill
+// switch, and the optional WorkspaceFileCap auto-degrade. Returns false
+// (with a verbose log on auto-degrade) when the call should skip
+// extraction + resolver + attachment.
+//
+// scopePaths comes from ReviewOptions.ScopePaths. When non-empty, the
+// WorkspaceFileCap check is skipped — the cap exists to prevent
+// whole-workspace CPU spins, and a scoped walk does not hit that hot
+// path. Without this bypass, monorepos like Oneplat (6062 files, cap
+// 3000) would never benefit from --paths-scoped reviews.
+func (e *Engine) shouldEnrich(bundle diff.Bundle, scopePaths []string) bool {
 	if e.cfg.WorkspaceRoot == "" {
 		return false
 	}
@@ -27,7 +33,7 @@ func (e *Engine) shouldEnrich(bundle diff.Bundle) bool {
 	if len(bundle.Diff) == 0 && len(bundle.Untracked) == 0 {
 		return false
 	}
-	if e.cfg.WorkspaceFileCap > 0 {
+	if e.cfg.WorkspaceFileCap > 0 && len(scopePaths) == 0 {
 		if count, ok := countTrackedFiles(e.cfg.WorkspaceRoot); ok && count > e.cfg.WorkspaceFileCap {
 			e.logf("[warn] workspace has %d tracked files (cap %d); auto-skipping enrichment to avoid CPU spin\n",
 				count, e.cfg.WorkspaceFileCap)
