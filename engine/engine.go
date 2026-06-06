@@ -161,7 +161,7 @@ func (e *Engine) Review(ctx context.Context, bundle diff.Bundle, opts ReviewOpti
 			}
 		}
 		if !usedV2 {
-			rstats, rerr = resolver.FindReferences(syms, e.cfg.WorkspaceRoot, diffPaths, 5, 4*1024)
+			rstats, rerr = resolver.FindReferences(syms, e.cfg.WorkspaceRoot, diffPaths, opts.ScopePaths, 5, 4*1024)
 		}
 		if rerr != nil && e.cfg.Verbose {
 			e.logf("[warn] resolver: %v\n", rerr)

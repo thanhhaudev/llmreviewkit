@@ -45,6 +45,7 @@ func FindReferences(
 	syms []symbols.Symbol,
 	workspaceRoot string,
 	diffFiles []string,
+	scopePaths []string,
 	maxRefsPerSymbol int,
 	maxExcerptBytes int,
 ) (ResolveStats, error) {
@@ -86,7 +87,7 @@ func FindReferences(
 	}
 
 	// Walk workspace. Collect candidate files into tiers.
-	tier0, tier1, tier2, err := collectTiers(workspaceRoot, tier0Dirs)
+	tier0, tier1, tier2, err := collectTiers(workspaceRoot, tier0Dirs, scopePaths)
 	if err != nil {
 		return stats, err
 	}
@@ -183,47 +184,98 @@ func compileSymbolPattern(name string) *regexp.Regexp {
 	)
 }
 
-func collectTiers(ws string, tier0Dirs map[string]bool) (t0, t1, t2 []string, err error) {
-	// Walk once, classify each file into a tier.
+// collectTiers classifies workspace files into Tier 0 (diff dirs), Tier 1
+// (sibling subtrees), and Tier 2 (everything else). When scopePaths is
+// non-empty, the walk is limited to the union of those subtrees — files
+// outside them are not classified at all. When scopePaths is nil/empty the
+// entire workspace is walked (pre-v1.5.3 behavior).
+//
+// Scope paths are repo-relative (matches the kizunax --paths flag values).
+// Overlapping scopes are deduped so a file is never visited twice.
+// Empty-string scope entries are silently dropped; nil/empty-after-filter
+// scopes walk the full workspace.
+func collectTiers(ws string, tier0Dirs map[string]bool, scopePaths []string) (t0, t1, t2 []string, err error) {
 	tier0Set := map[string]bool{}
 	tier1Set := map[string]bool{}
 	for d := range tier0Dirs {
 		abs := filepath.Join(ws, d)
 		tier0Set[abs] = true
-		// Tier 1 = files under sibling subtrees of Tier 0
-		// (i.e., file's grandparent == one of Tier 0's parents).
 		parent := filepath.Dir(abs)
 		if parent != "" {
 			tier1Set[parent] = true
 		}
 	}
 
-	err = filepath.WalkDir(ws, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			fmt.Fprintf(os.Stderr, "[warn] resolver: skip %s: %v\n", path, walkErr)
-			return nil
-		}
-		if d.IsDir() {
-			if shouldSkipDir(d.Name()) && path != ws {
-				return fs.SkipDir
+	walkOnce := func(root string) error {
+		return filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				fmt.Fprintf(os.Stderr, "[warn] resolver: skip %s: %v\n", path, walkErr)
+				return nil
+			}
+			if d.IsDir() {
+				if shouldSkipDir(d.Name()) && path != root {
+					return fs.SkipDir
+				}
+				return nil
+			}
+			if shouldSkipFile(d.Name()) {
+				return nil
+			}
+			dir := filepath.Dir(path)
+			switch {
+			case tier0Set[dir]:
+				t0 = append(t0, path)
+			case tier1Set[filepath.Dir(dir)]:
+				t1 = append(t1, path)
+			default:
+				t2 = append(t2, path)
 			}
 			return nil
+		})
+	}
+
+	// Filter empty-string scope entries — filepath.Join(ws, "") == ws would
+	// silently walk the entire workspace and defeat the scope purpose.
+	var clean []string
+	for _, sp := range scopePaths {
+		if sp == "" {
+			continue
 		}
-		if shouldSkipFile(d.Name()) {
-			return nil
+		clean = append(clean, sp)
+	}
+
+	if len(clean) == 0 {
+		err = walkOnce(ws)
+	} else {
+		// Dedup absolute scope roots so overlapping --paths args
+		// (e.g. "app" + "app/Http") visit each file at most once.
+		// Sort by length ascending so shorter (ancestor) paths walk
+		// first; nested sub-paths are then skipped because they're
+		// already covered by the ancestor's walk.
+		abs := make([]string, 0, len(clean))
+		for _, sp := range clean {
+			abs = append(abs, filepath.Join(ws, sp))
 		}
-		// Classify into tier by enclosing dir.
-		dir := filepath.Dir(path)
-		switch {
-		case tier0Set[dir]:
-			t0 = append(t0, path)
-		case tier1Set[filepath.Dir(dir)]:
-			t1 = append(t1, path)
-		default:
-			t2 = append(t2, path)
+		sort.Slice(abs, func(i, j int) bool { return len(abs[i]) < len(abs[j]) })
+		walked := []string{}
+		for _, root := range abs {
+			covered := false
+			for _, w := range walked {
+				if root == w || strings.HasPrefix(root, w+string(filepath.Separator)) {
+					covered = true
+					break
+				}
+			}
+			if covered {
+				continue
+			}
+			walked = append(walked, root)
+			if e := walkOnce(root); e != nil && err == nil {
+				err = e
+			}
 		}
-		return nil
-	})
+	}
+
 	sort.Strings(t0)
 	sort.Strings(t1)
 	sort.Strings(t2)
