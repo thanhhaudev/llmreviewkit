@@ -435,27 +435,40 @@ run with `OPENAI_API_KEY` set.
 | `render` | Markdown rendering of a review result. |
 | `prompt` | Mode (Standard / Adversarial) + template interpolation. Embeds default templates. |
 | `provider` | Provider interface + OpenAI / Anthropic adapters + `mock` sub-package for tests. |
-| `symbols` | AST symbol extraction (Go stdlib AST + tree-sitter WASM grammars + regex fallback). |
+| `symbols` | Symbol extraction (Go stdlib AST + [phpsyms](https://github.com/thanhhaudev/phpsyms) for PHP + tree-sitter WASM for TypeScript / Python + regex fallback). PHP routed via `engine.ExtractionPolicy`. |
 | `resolver` | Cross-references diff symbols against the workspace. v1 regex + v2 index-backed. |
 | `index` | Workspace AST index — per-workspace symbol map with mtime-incremental updates. |
 | `grammars` | Runtime registry for tree-sitter `.wasm` grammars. Call `grammars.Install` to fetch + cache. |
 | `bundlelog` | Optional jsonl telemetry. `AppendTo(sink, entry)` — bring your own `io.Writer`. |
 | `statedir` | Per-workspace state directory + atomic write helpers. |
 | `glossary` | Project glossary file loader. |
+| `context` | Project review-context file loader. Injects behavioral hints (intentional patterns, suppressed categories) above the glossary in the system prompt. v1.5.1+. |
 | `errors` | Structured error kinds for user vs. provider vs. internal failures. |
 
 ## Grammars
 
-Symbol extraction has four paths. Pick the row that matches your source files:
+Symbol extraction has five paths. Pick the row that matches your source files:
 
 | Extraction path | Languages |
 |---|---|
 | Go stdlib AST | Go |
-| Tree-sitter WASM | PHP, Python, TypeScript (and TSX) |
-| Regex (per-language tuned) | PHP, Python, TypeScript — used when the WASM grammar isn't installed |
+| Go-native [phpsyms](https://github.com/thanhhaudev/phpsyms) | PHP — default since v1.5.0 (~5000 files/sec, stdlib-only, no WASM) |
+| Tree-sitter WASM | Python, TypeScript (and TSX); PHP as a fallback when `ExtractionPolicy.PHP = StrategyTreeSitter` |
+| Regex (per-language tuned) | PHP, Python, TypeScript — used when the chosen path returns no symbols or the WASM grammar isn't installed |
 | Regex (universal default) | Every other extension — JavaScript / JSX / MJS, Rust, Java, C#, Ruby, Kotlin, Swift, Scala, C / C++. Catches `func / def / class / import / …` well enough to surface symbols, but it isn't AST-quality. |
 
 More languages will be promoted from regex to tree-sitter over time.
+
+PHP routes through `engine.Config.ExtractionPolicy.PHP`:
+
+```go
+cfg.ExtractionPolicy.PHP = engine.StrategyAuto         // default
+// engine.StrategyPhpsyms    — skip the fallback
+// engine.StrategyTreeSitter — force the WASM walker
+// engine.StrategyRegex      — force the regex path
+```
+
+Tree-sitter PHP stays as a fallback until v1.8.0.
 
 Go works out of the box. The tree-sitter `.wasm` grammars are not bundled —
 fetch them on demand:
