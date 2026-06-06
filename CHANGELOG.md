@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.5.2 — 2026-06-06
+
+### Fixed
+- Data races on `symbols.currentPolicy` and `symbols.extractObserver` globals
+  flagged by `go test -race` (pre-existing since v1.5.0). `ExtractWithPolicy`
+  spawns a worker goroutine for timeout handling; concurrent
+  `SetExtractionPolicy` / `SetExtractObserver` calls now go through
+  `sync.RWMutex` (single `policyMu` guards both globals). Snapshot helper
+  `snapshotPolicy()` returns a value copy for safe read access.
+- Affects production `engine.New()` callers that update policy after
+  spawning extraction work — race was real, not test-only.
+
 ## v1.5.1 — 2026-06-06
 
 ### Added

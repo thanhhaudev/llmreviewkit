@@ -5,6 +5,7 @@ package symbols
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/thanhhaudev/llmreviewkit/symbols/treesitter"
@@ -26,7 +27,19 @@ type extractionPolicyState struct {
 	maxFileSize    int           // 0 = no cap
 }
 
-var currentPolicy = extractionPolicyState{php: 0}
+var (
+	policyMu      sync.RWMutex // guards currentPolicy AND extractObserver (observer.go)
+	currentPolicy = extractionPolicyState{php: 0}
+)
+
+// snapshotPolicy returns a copy of the current extraction policy. Callers
+// MUST use this rather than reading currentPolicy directly so concurrent
+// SetExtractionPolicy calls remain safe under -race.
+func snapshotPolicy() extractionPolicyState {
+	policyMu.RLock()
+	defer policyMu.RUnlock()
+	return currentPolicy
+}
 
 // SetExtractionPolicy is called by engine.New() to mirror the engine.Config
 // policy into the symbols package, since symbols cannot import engine.
@@ -35,11 +48,12 @@ var currentPolicy = extractionPolicyState{php: 0}
 // extractTimeout=0 disables the per-file timeout. maxFileSize=0 disables
 // the size cap.
 //
-// Threading model: this is set once at New() time and read by the dispatch
-// switch on every Extract call. Reads are not atomic; setup happens before
-// any Extract goroutines are spawned by the engine, so this is safe in
-// practice.
+// Threading model: guarded by policyMu. ExtractWithPolicy spawns a goroutine
+// that calls DispatchPHP and may outlive a timeout; concurrent
+// SetExtractionPolicy must not race with that goroutine's snapshot read.
 func SetExtractionPolicy(phpStrategy int, extractTimeout time.Duration, maxFileSize int) {
+	policyMu.Lock()
+	defer policyMu.Unlock()
 	currentPolicy.php = phpStrategy
 	currentPolicy.extractTimeout = extractTimeout
 	currentPolicy.maxFileSize = maxFileSize
@@ -59,7 +73,8 @@ func SetExtractionPolicy(phpStrategy int, extractTimeout time.Duration, maxFileS
 // Tree-sitter path is preserved until v1.8.0 (a wrap-up).
 func DispatchPHP(ctx context.Context, lang *treesitter.Language, content []byte, path string) []Symbol {
 	start := time.Now()
-	switch currentPolicy.php {
+	policy := snapshotPolicy()
+	switch policy.php {
 	case 2: // StrategyPhpsyms
 		syms := ExtractPHPViaPhpsyms(path, content)
 		fireExtractEvent(path, 2, time.Since(start))
@@ -101,14 +116,15 @@ type PolicyWarning struct {
 // This function is opt-in. Callers that don't need timeout/size gates can
 // keep using ForFile + Extract directly.
 func ExtractWithPolicy(ctx context.Context, lang *treesitter.Language, path string, content []byte) ([]Symbol, *PolicyWarning) {
-	if currentPolicy.maxFileSize > 0 && len(content) > currentPolicy.maxFileSize {
+	policy := snapshotPolicy()
+	if policy.maxFileSize > 0 && len(content) > policy.maxFileSize {
 		return nil, &PolicyWarning{
 			File:   path,
-			Reason: fmt.Sprintf("file %d bytes exceeds MaxFileSize %d", len(content), currentPolicy.maxFileSize),
+			Reason: fmt.Sprintf("file %d bytes exceeds MaxFileSize %d", len(content), policy.maxFileSize),
 		}
 	}
 
-	timeout := currentPolicy.extractTimeout
+	timeout := policy.extractTimeout
 	if timeout <= 0 {
 		return DispatchPHP(ctx, lang, content, path), nil
 	}

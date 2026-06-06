@@ -33,24 +33,28 @@ func ExtractStrategyName(strategy int) string {
 }
 
 // extractObserver is the singleton sink for ExtractEvent. nil means no
-// observer registered; DispatchPHP skips the fire fast-path in that case.
-//
-// Note: not atomic. Callers are expected to call SetExtractObserver at
-// engine setup time, before any Extract goroutines spawn. Subsequent reads
-// happen during normal extraction. This mirrors the SetExtractionPolicy
-// pattern.
+// observer registered; fireExtractEvent skips the call in that case.
+// Guarded by policyMu (defined in policy.go) — same lifecycle as
+// currentPolicy.
 var extractObserver func(ExtractEvent)
 
 // SetExtractObserver installs the observer. Pass nil to clear.
+// Safe to call concurrently with extraction goroutines.
 func SetExtractObserver(f func(ExtractEvent)) {
+	policyMu.Lock()
+	defer policyMu.Unlock()
 	extractObserver = f
 }
 
 // fireExtractEvent emits an event if an observer is registered. Internal —
 // used by DispatchPHP. Kept package-private so external callers don't
-// fabricate events.
+// fabricate events. Reads under RLock so SetExtractObserver swaps don't
+// race with concurrent extraction goroutines.
 func fireExtractEvent(file string, strategy int, duration time.Duration) {
-	if extractObserver != nil {
-		extractObserver(ExtractEvent{File: file, Strategy: strategy, Duration: duration})
+	policyMu.RLock()
+	obs := extractObserver
+	policyMu.RUnlock()
+	if obs != nil {
+		obs(ExtractEvent{File: file, Strategy: strategy, Duration: duration})
 	}
 }
