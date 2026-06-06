@@ -132,7 +132,7 @@ func (e *Engine) Review(ctx context.Context, bundle diff.Bundle, opts ReviewOpti
 	// Gated by shouldEnrich (v1.2.0): WorkspaceRoot non-empty AND
 	// SkipEnrichment false AND WorkspaceFileCap not exceeded AND there's
 	// something to enrich.
-	if e.shouldEnrich(bundle) {
+	if e.shouldEnrich(bundle, opts.ScopePaths) {
 		symbols.SetWorkspaceRoot(e.cfg.WorkspaceRoot)
 		syms := symbols.ExtractFromBundle(bundle)
 		diffPaths := diff.Paths(bundle)
